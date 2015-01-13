@@ -1,7 +1,19 @@
 (ns fixie.core
   (:require [clj-mapdb.core :as m]
             [potemkin [types :refer [definterface+ def-abstract-type deftype+]]]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [taoensso.nippy :as nippy :refer [freeze-to-out! thaw-from-in!]]))
+
+(defn nippy-serializer
+  []
+  (reify
+    org.mapdb.Serializer
+    (serialize [this out obj]
+      (freeze-to-out! out obj))
+    (deserialize [this in available]
+      (thaw-from-in! in))
+    (fixedSize [this] -1)
+    java.io.Serializable))
 
 (definterface+ IMapDB
   (db        [this] "Returns the underlying db")
@@ -64,8 +76,12 @@
 (deftype+ DBTreeMap [db coll label]
   MapColl)
 
-(def kw->type {:hash-map ->DBHashMap
-               :tree-map ->DBTreeMap})
+(def kw->type {:hash-map {:wrapper ->DBHashMap
+                          :default {:key-serializer (nippy-serializer)
+                                    :value-serializer (nippy-serializer)}}
+               :tree-map {:wrapper ->DBTreeMap
+                          :default {:key-serializer (nippy-serializer)
+                                    :value-serializer (nippy-serializer)}}})
 
 (def java->type {org.mapdb.HTreeMap ->DBHashMap
                  org.mapdb.BTreeMap ->DBTreeMap})
@@ -73,7 +89,7 @@
 (deftype MapDB [db storage options]
   IMapDB
   (db        [this] db)
-  (close!    [this] (.close db) this)
+  (close!    [this] (.close db))
   (closed?   [this] (.isClosed db))
   (commit!   [this] (.commit db) this)
   (rollback! [this] (.rollback db) this)
@@ -94,15 +110,16 @@
                          coll
                          (let [typ (:type opts)
                                nam (name k)
-                               coll (m/create-collection! db typ nam opts)
-                               wrapper (kw->type typ)]
+                               {:keys [wrapper default]} (kw->type typ)
+                               coll (m/create-collection! db typ nam (merge default opts))]
                            (if wrapper
                              (wrapper db coll nam)
                              coll))))
   clojure.lang.ITransientMap
   (assoc [this k opts] (let [typ (:type opts)
-                             label (name k)]
-                         (m/create-collection! db typ label opts)
+                             label (name k)
+                             {:keys [default]} (kw->type typ)]
+                         (m/create-collection! db typ label (merge default opts))
                          this))
   (without [this k] (.delete db (name k)) this)
   clojure.lang.Seqable
