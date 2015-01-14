@@ -15,6 +15,10 @@
     (fixedSize [this] -1)
     java.io.Serializable))
 
+(defn nippy-btree-key-serializer
+  []
+  (org.mapdb.BTreeKeySerializer$BasicKeySerializer. (nippy-serializer)))
+
 (definterface+ IMapDB
   (db        [this] "Returns the underlying db")
   (close!    [this] "Closes this db")
@@ -41,6 +45,8 @@
        (seq (.coll this)))
   clojure.lang.IFn
   (invoke [this k]
+          (.get (.coll this) k))
+  (invoke [this k default]
           (.get (.coll this) k))
   clojure.lang.Named
   (getName [this] (.label this))
@@ -77,10 +83,10 @@
   MapColl)
 
 (def kw->type {:hash-map {:wrapper ->DBHashMap
-                          :default {:key-serializer (nippy-serializer)
+                          :default {:key-serializer   (nippy-serializer)
                                     :value-serializer (nippy-serializer)}}
                :tree-map {:wrapper ->DBTreeMap
-                          :default {:key-serializer (nippy-serializer)
+                          :default {:key-serializer   (nippy-btree-key-serializer)
                                     :value-serializer (nippy-serializer)}}})
 
 (def java->type {org.mapdb.HTreeMap ->DBHashMap
@@ -104,7 +110,7 @@
                     (let [label (name k)
                           wrapper (java->type (type coll))]
                       (if wrapper
-                        (wrapper db coll label)
+                        (wrapper this coll label)
                         coll))))
   (valAt [this k opts] (if-let [coll (.valAt this k)]
                          coll
@@ -113,7 +119,7 @@
                                {:keys [wrapper default]} (kw->type typ)
                                coll (m/create-collection! db typ nam (merge default opts))]
                            (if wrapper
-                             (wrapper db coll nam)
+                             (wrapper this coll nam)
                              coll))))
   clojure.lang.ITransientMap
   (assoc [this k opts] (let [typ (:type opts)
