@@ -32,6 +32,15 @@
   (options   [this] "Returns the options this db was created with"))
 
 (def-abstract-type MapColl
+  IMapDB
+  (db        [this] (db (.mdb this)))
+  (close!    [this] (close! (.mdb this)))
+  (closed?   [this] (closed? (.mdb this)))
+  (commit!   [this] (commit! (.mdb this)))
+  (rollback! [this] (rollback! (.mdb this)))
+  (compact!  [this] (compact! (.mdb this)))
+  (storage   [this] (throw (UnsupportedOperationException.)))
+  (options   [this] (throw (UnsupportedOperationException.)))
   clojure.lang.Counted
   (count [this] (.sizeLong (.coll this)))
   clojure.lang.ILookup
@@ -41,45 +50,35 @@
   (assoc [this k v] (.put (.coll this) k v) this)
   (without [this k] (.remove (.coll this) k) this)
   clojure.lang.Seqable
-  (seq [this]
-       (seq (.coll this)))
+  (seq [this] (seq (.coll this)))
   clojure.lang.IFn
-  (invoke [this k]
-          (.get (.coll this) k))
-  (invoke [this k default]
-          (.get (.coll this) k))
+  (invoke [this k] (.get (.coll this) k))
+  (invoke [this k default] (.get (.coll this) k))
   clojure.lang.Named
   (getName [this] (.label this))
   java.util.Map
-  (get [this k]
-       (.get (.coll this) k))
-  (isEmpty [this]
-           (.isEmpty (.coll this)))
-  (size [this]
-        (.size (.coll this)))
-  (keySet [this]
-          (.keySet (.coll this)))
-  (put [this k v]
-       (.put (.coll this) k v))
-  (putAll [this arg]
-          (.putAll this arg))
-  (clear [this]
-         (.clear (.coll this)))
-  (remove [this k]
-          (.remove (.coll this) k))
-  (values [this]
-          (.values (.coll this)))
-  (entrySet [this]
-            (.entrySet (.coll this)))
-  (containsKey [this k]
-               (.containsKey (.coll this) k))
-  (containsValue [this v]
-                 (.containsValue (.coll this) v)))
+  (get [this k] (.get (.coll this) k))
+  (isEmpty [this] (.isEmpty (.coll this)))
+  (size [this] (.size (.coll this)))
+  (keySet [this] (.keySet (.coll this)))
+  (put [this k v] (.put (.coll this) k v))
+  (putAll [this arg] (.putAll this arg))
+  (clear [this] (.clear (.coll this)))
+  (remove [this k] (.remove (.coll this) k))
+  (values [this] (.values (.coll this)))
+  (entrySet [this] (.entrySet (.coll this)))
+  (containsKey [this k] (.containsKey (.coll this) k))
+  (containsValue [this v] (.containsValue (.coll this) v))
+  java.util.concurrent.ConcurrentMap
+  (putIfAbsent [this k v] (.putIfAbsent (.coll this) k v))
+  (remove [this k old-val] (.remove (.coll this) k old-val))
+  (replace [this k old-val new-val] (.replace (.coll this) k old-val new-val))
+  (replace [this k val] (.replace (.coll this) k val)))
 
-(deftype+ DBHashMap [db coll label]
+(deftype+ DBHashMap [mdb coll label]
   MapColl)
 
-(deftype+ DBTreeMap [db coll label]
+(deftype+ DBTreeMap [mdb coll label]
   MapColl)
 
 (def kw->type {:hash-map {:wrapper ->DBHashMap
@@ -160,3 +159,23 @@
   ([db-type other] (if (map? other) (mapdb db-type nil other) (mapdb other {})))
   ([db-type] (mapdb db-type nil {}))
   ([] (mapdb :heap nil {})))
+
+(defn atomic-update-in!
+  ([m [k & ks] f args]
+   (let [top-val (get m k ::absent)]
+     (if (= top-val ::absent)
+       (let [res (apply f nil args)
+             ret (.putIfAbsent m k res)]
+         (if (nil? ret)
+           true))
+       (let [res (if ks
+                   (apply update-in top-val ks f args)
+                   (apply f top-val args))]
+         (.replace m k top-val res))))))
+
+(defn update-in!
+  [m ks f & args]
+  (loop []
+    (when (not (atomic-update-in! m ks f args))
+      (recur)))
+  m)
