@@ -179,3 +179,16 @@
     (when (not (atomic-update-in! m ks f args))
       (recur)))
   m)
+
+(defmacro with-tx
+  [[db tx-maker] & body]
+  `(let [~(symbol tx) (->MapDB (.makeTx ~tx-maker) nil {})]
+     (try
+       (let [return# ~@body]
+         (commit! ~(symbol tx))
+         return#)
+       (catch Exception e#
+         (rollback! ~(symbol tx))
+         (throw e#))
+       (finally
+         (close! ~(symbol tx))))))
