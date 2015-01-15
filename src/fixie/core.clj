@@ -134,29 +134,48 @@
   (invoke [this k]
     (.valAt this k)))
 
+(deftype TransactionMapDB [tx-mkr storage options])
+
+(defmethod print-method TransactionMapDB
+  [db ^java.io.Writer w]
+  (.write w "#TransactionDB<")
+  (.write w (name (or (.storage db) "")))
+  (.write w ">"))
+
 (defmethod print-method DBHashMap
   [coll ^java.io.Writer w]
-  (print-method (.coll coll) w))
+  (try
+    (print-method (.coll coll) w)
+    (catch IllegalAccessError e
+      (.write w (format "<%s : %s closed>" (name coll) (type coll))))))
 
 (defmethod print-method DBTreeMap
   [coll ^java.io.Writer w]
-  (print-method (.coll coll) w))
+  (try
+    (print-method (.coll coll) w)
+    (catch IllegalAccessError e
+      (.write w (format "<%s : %s closed>" (name coll) (type coll))))))
 
 (defmethod print-method MapDB
   [db ^java.io.Writer w]
   (.write w "#MapDB<")
-  (.write w (name (storage db)))
+  (.write w (name (or (.storage db) "")))
   (.write w ">{")
-  (let [all-colls (for [[k v] db]
-                    (str k " <" (last (str/split (str (type v)) #"\.")) ">"))]
-    (.write w (str/join ", " all-colls)))
+  (try
+    (let [all-colls (for [[k v] db]
+                      (str k " <" (last (str/split (str (type v)) #"\.")) ">"))]
+      (.write w (str/join ", " all-colls)))
+    (catch IllegalAccessError e
+      (.write w "closed")))
   (.write w "}"))
 
 (defn mapdb
   ([db-type arg opts]
    (let [db (m/create-db db-type arg opts)]
-     (->MapDB db db-type opts)))
-  ([db-type other] (if (map? other) (mapdb db-type nil other) (mapdb other {})))
+     (if (:fully-transactional? opts)
+       (->TransactionMapDB db db-type opts)
+       (->MapDB db db-type opts))))
+  ([db-type other] (if (map? other) (mapdb db-type nil other) (mapdb db-type other {})))
   ([db-type] (mapdb db-type nil {}))
   ([] (mapdb :heap nil {})))
 
@@ -182,13 +201,16 @@
 
 (defmacro with-tx
   [[db tx-maker] & body]
-  `(let [~(symbol tx) (->MapDB (.makeTx ~tx-maker) nil {})]
+  `(let [~(symbol db) (->MapDB (.makeTx (.tx-mkr ~tx-maker)) (.storage ~tx-maker) {})]
      (try
        (let [return# ~@body]
-         (commit! ~(symbol tx))
+         (when-not (closed? ~(symbol db))
+           (commit! ~(symbol db)))
          return#)
        (catch Exception e#
-         (rollback! ~(symbol tx))
+         (when-not (closed? ~(symbol db))
+           (rollback! ~(symbol db)))
          (throw e#))
        (finally
-         (close! ~(symbol tx))))))
+         (when-not (closed? ~(symbol db))
+           (close! ~(symbol db)))))))
