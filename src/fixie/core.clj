@@ -15,7 +15,8 @@
     (serialize [this out obj]
       (freeze-to-out! out obj))
     (deserialize [this in available]
-      (thaw-from-in! in))
+      (if (> available 0)
+        (thaw-from-in! in)))
     (fixedSize [this] -1)
     java.io.Serializable))
 
@@ -46,10 +47,10 @@
   (storage   [this] (throw (UnsupportedOperationException.)))
   (options   [this] (throw (UnsupportedOperationException.)))
   clojure.lang.Counted
-  (count [this] (.sizeLong (.coll this)))
+  (count [this] (.size ^Map (.coll this)))
   clojure.lang.ILookup
   (valAt [this k] (.get ^Map (.coll this) k))
-  (valAt [this k default] (if-let [res (.get ^Map (.coll this) k)] (if (nil? res) default res)))
+  (valAt [this k default] (let [res (.get ^Map (.coll this) k)] (if (nil? res) default res)))
   clojure.lang.ITransientMap
   (assoc [this k v] (.put ^Map (.coll this) k v) this)
   (without [this k] (.remove ^Map (.coll this) k) this)
@@ -57,7 +58,7 @@
   (seq [this] (seq (.coll this)))
   clojure.lang.IFn
   (invoke [this k] (.get ^Map (.coll this) k))
-  (invoke [this k default] (.get ^Map (.coll this) k))
+  (invoke [this k default] (let [res (.get ^Map (.coll this) k)] (if (nil? res) default res)))
   clojure.lang.Named
   (getName [this] (.label this))
   java.util.Map
