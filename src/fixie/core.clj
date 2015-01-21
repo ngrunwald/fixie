@@ -15,8 +15,7 @@
     (serialize [this out obj]
       (freeze-to-out! out obj))
     (deserialize [this in available]
-      (if (> available 0)
-        (thaw-from-in! in)))
+      (thaw-from-in! in))
     (fixedSize [this] -1)
     java.io.Serializable))
 
@@ -143,7 +142,7 @@
 
 (defmethod print-method TransactionMapDB
   [^TransactionMapDB db ^java.io.Writer w]
-  (.write w "#TransactionDB<")
+  (.write w "#TransactionMapDB<")
   (.write w (name (or (.storage db) "")))
   (.write w ">"))
 
@@ -205,17 +204,15 @@
   m)
 
 (defmacro with-tx
-  [[db tx-maker] & body]
-  `(let [~(symbol db) (->MapDB (.makeTx (.tx-mkr ~tx-maker)) (.storage ~tx-maker) {})]
-     (try
-       (let [return# ~@body]
-         (when-not (closed? ~(symbol db))
-           (commit! ~(symbol db)))
-         return#)
-       (catch Exception e#
-         (when-not (closed? ~(symbol db))
-           (rollback! ~(symbol db)))
-         (throw e#))
-       (finally
-         (when-not (closed? ~(symbol db))
-           (close! ~(symbol db)))))))
+  [[mdb tx-maker] & body]
+  (let [mdb-symb (symbol mdb)]
+    `(let [~mdb-symb (->MapDB (.makeTx (.tx-mkr ~tx-maker)) (.storage ~tx-maker) {})]
+       (try
+         (let [return# ~@body]
+           (when-not (closed? ~mdb-symb)
+             (commit! ~mdb-symb))
+           return#)
+         (catch Exception e#
+           (when-not (closed? ~mdb-symb)
+             (rollback! ~mdb-symb))
+           (throw e#))))))
