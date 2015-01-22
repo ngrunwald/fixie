@@ -106,8 +106,7 @@
   (storage   [this] storage)
   (options   [this] options)
   clojure.lang.Counted
-  (count [this]
-    (count (.getAll db)))
+  (count [this] (count (.getAll db)))
   clojure.lang.ILookup
   (valAt [this k] (if-let [coll (.get db (name k))]
                     (let [label (name k)
@@ -115,15 +114,7 @@
                       (if wrapper
                         (wrapper this coll label)
                         coll))))
-  (valAt [this k opts] (if-let [coll (.valAt this k)]
-                         coll
-                         (let [typ (:type opts)
-                               nam (name k)
-                               {:keys [wrapper default]} (kw->type typ)
-                               coll (m/create-collection! db typ nam (merge default opts))]
-                           (if wrapper
-                             (wrapper this coll nam)
-                             coll))))
+  (valAt [this k opts] (throw (UnsupportedOperationException.)))
   clojure.lang.ITransientMap
   (assoc [this k opts] (let [typ (:type opts)
                              label (name k)
@@ -132,11 +123,10 @@
                          this))
   (without [this k] (.delete db (name k)) this)
   clojure.lang.Seqable
-  (seq [this]
-    (seq (.getAll db)))
+  (seq [this] (seq (.getAll db)))
   clojure.lang.IFn
-  (invoke [this k]
-    (.valAt this k)))
+  (invoke [this k] (.valAt this k))
+  (invoke [this k _] (throw (UnsupportedOperationException.))))
 
 (deftype TransactionMapDB [tx-mkr storage options])
 
@@ -188,7 +178,10 @@
    (let [top-val (get m k ::absent)]
      (if (= top-val ::absent)
        (let [res (apply f nil args)
-             ret (.putIfAbsent m k res)]
+             full-res (if (> (count ks) 0)
+                        (assoc-in {} ks res)
+                        res)
+             ret (.putIfAbsent m k full-res)]
          (if (nil? ret)
            true))
        (let [res (if ks

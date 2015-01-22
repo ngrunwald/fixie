@@ -11,7 +11,7 @@
   (is (not (closed? mdb))))
 
 (with-test
-  (def hmap1 (get mdb :test1 {:type :hash-map :counter-enable true}))
+  (def hmap1 (:test1 (assoc! mdb :test1 {:type :hash-map :counter-enable true})))
   (commit! mdb)
   (is (instance? DBHashMap hmap1))
   (is (empty? hmap1))
@@ -33,14 +33,18 @@
   (commit! hmap1)
   (is (= 53 (reduce (fn [acc [k v]] (+ acc v)) 0 hmap1)))
   (rollback! hmap1)
-  (is (= 2 (count hmap1))))
+  (is (= 2 (count hmap1)))
+  (is (= 22 (:titi (update-in! hmap1 [:titi] * 2))))
+  (let [hm (update-in! hmap1 [:l1 :l2 :l3] (constantly "toto"))]
+    (is (= "toto" (get-in hm [:l1 :l2 :l3])))))
 
-(with-test
-  (def tdb (mapdb :memory {:fully-transactional? true}))
-  (is (instance? TransactionMapDB tdb))
-  (with-tx [tx tdb]
-    (let [hm1 (get tx :test1 {:type :tree-map})]
-      (assoc! hm1 :foo "bar")))
-  (with-tx [tx1 tdb] 42)
-  ;; (is "bar" (with-tx [tx tdb] (println "toto")))
-  )
+
+;; (with-test
+;;   (def tdb (mapdb :memory {:fully-transactional? true}))
+;;   (is (instance? TransactionMapDB tdb))
+;;   (with-tx [tx tdb]
+;;     (let [hm1 (get tx :test1 {:type :tree-map})]
+;;       (assoc! hm1 :foo "bar")))
+;;   (with-tx [tx1 tdb] 42)
+;;   ;; (is "bar" (with-tx [tx tdb] (println "toto")))
+;;   )
