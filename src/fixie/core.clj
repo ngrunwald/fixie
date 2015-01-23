@@ -6,8 +6,6 @@
   (:import [java.util Map]
            [java.util.concurrent ConcurrentMap]))
 
-(set! *warn-on-reflection* true)
-
 (defn nippy-serializer
   []
   (reify
@@ -196,6 +194,8 @@
       (recur)))
   m)
 
+
+;; NOT WORKING YET - DO NOT TOUCH
 (defmacro with-tx
   [[mdb tx-maker] & body]
   (let [mdb-symb (symbol mdb)]

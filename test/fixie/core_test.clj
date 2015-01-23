@@ -4,6 +4,7 @@
    [clojure.test :refer :all])
   (:import [fixie.core MapDB DBHashMap TransactionMapDB]))
 
+(set! *warn-on-reflection* true)
 
 (with-test
   (def mdb (mapdb :memory {:cache-disable true}))

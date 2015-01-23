@@ -1,14 +1,16 @@
+[![Build Status](https://travis-ci.org/ngrunwald/fixie.svg)](https://travis-ci.org/ngrunwald/fixie)
+
 # fixie
 
-A Clojure library designed to ... well, that part is up to you.
+Clojure persisted on disk datastructures based on MapDB.
+
+**Work in progress - API in flux - Not production ready yet**
 
 ## Usage
 
-FIXME
-
 ## License
 
-Copyright © 2015 FIXME
+Copyright © 2015 Nils Grunwald
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
