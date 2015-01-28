@@ -1,4 +1,4 @@
-(defproject fixie "0.1.0-beta1"
+(defproject fixie "0.1.0-beta2-SNAPSHOT"
   :description "Clojure persisted on disk datastructures based on MapDB"
   :url "https://github.com/ngrunwald/fixie"
   :license {:name "Eclipse Public License"

@@ -2,20 +2,24 @@
   (:require [clj-mapdb.core :as m]
             [potemkin [types :refer [definterface+ def-abstract-type deftype+]]]
             [clojure.string :as str]
-            [taoensso.nippy :as nippy :refer [freeze-to-out! thaw-from-in!]])
+            [taoensso.nippy
+             :as nippy
+             :refer [freeze-to-out! thaw-from-in!]])
   (:import [java.util Map]
            [java.util.concurrent ConcurrentMap]))
 
+(deftype NippySerializer []
+  org.mapdb.Serializer
+  (serialize [this out obj]
+    (freeze-to-out! out obj))
+  (deserialize [this in available]
+    (thaw-from-in! in))
+  (fixedSize [this] -1)
+  java.io.Serializable)
+
 (defn nippy-serializer
   []
-  (reify
-    org.mapdb.Serializer
-    (serialize [this out obj]
-      (freeze-to-out! out obj))
-    (deserialize [this in available]
-      (thaw-from-in! in))
-    (fixedSize [this] -1)
-    java.io.Serializable))
+  (NippySerializer.))
 
 (defn nippy-btree-key-serializer
   []
@@ -178,14 +182,18 @@
        (let [res (apply f nil args)
              full-res (if (> (count ks) 0)
                         (assoc-in {} ks res)
-                        res)
-             ret (.putIfAbsent m k full-res)]
-         (if (nil? ret)
-           true))
+                        res)]
+         (if (= full-res top-val)
+           true
+           (let [ret (.putIfAbsent m k full-res)]
+             (when (nil? ret)
+               true))))
        (let [res (if ks
                    (apply update-in top-val ks f args)
                    (apply f top-val args))]
-         (.replace m k top-val res))))))
+         (if (= res top-val)
+           true
+           (.replace m k top-val res)))))))
 
 (defn update-in!
   [m ks f & args]
