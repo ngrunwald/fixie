@@ -27,6 +27,9 @@
   (storage   [this] "Returns the storage type for this db")
   (options   [this] "Returns the options this db was created with"))
 
+(definterface+ IBindable
+  (bind      [this typ secondary fun] "Binds secondary collection with fn"))
+
 (def-abstract-type MapColl
   IMapDB
   (db        [this] (db (.mdb this)))
@@ -37,6 +40,8 @@
   (compact!  [this] (compact! (.mdb this)))
   (storage   [this] (throw (UnsupportedOperationException.)))
   (options   [this] (throw (UnsupportedOperationException.)))
+  IBindable
+  (bind  [this typ secondary fun] (m/bind typ (.coll this) secondary fun))
   clojure.lang.Counted
   (count [this] (.size ^Map (.coll this)))
   clojure.lang.ILookup

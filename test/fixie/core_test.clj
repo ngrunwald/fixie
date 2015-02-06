@@ -37,7 +37,10 @@
   (is (= 2 (count hmap1)))
   (is (= 22 (:titi (update-in! hmap1 [:titi] * 2))))
   (let [hm (update-in! hmap1 [:l1 :l2 :l3] (constantly "toto"))]
-    (is (= "toto" (get-in hm [:l1 :l2 :l3])))))
+    (is (= "toto" (get-in hm [:l1 :l2 :l3]))))
+  (let [mirror (:mirror1 (assoc! mdb :mirror1 {:type :hash-map :counter-enable true}))]
+    (bind hmap1 :secondary-value mirror (fn [old new] (str new "-mirror")))
+    (is (= "42-mirror" (get mirror :toto)))))
 
 
 ;; (with-test

@@ -4,5 +4,6 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.6.0"]
-                 [clj-mapdb "0.1.0-beta1"]
-                 [com.taoensso/nippy "2.7.1"]])
+                 [clj-mapdb "0.1.0-beta2-SNAPSHOT"]
+                 [com.taoensso/nippy "2.7.1"]]
+  :profiles {:dev {:aot [fixie.serializers clj-mapdb.serializers]}})
