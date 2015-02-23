@@ -15,6 +15,11 @@
   []
   (org.mapdb.BTreeKeySerializer$BasicKeySerializer. (nippy-serializer)))
 
+(def edn-serializer #'m/edn-serializer)
+(def base-serializer #'m/base-serializer)
+(def base-btree-key-serializer #'m/base-btree-key-serializer)
+(def edn-btree-key-serializer #'m/edn-btree-key-serializer)
+
 (definterface+ IMapDB
   (db        [this] "Returns the underlying db")
   (close!    [this] "Closes this db")
