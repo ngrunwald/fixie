@@ -20,6 +20,9 @@
 (def base-btree-key-serializer #'m/base-btree-key-serializer)
 (def edn-btree-key-serializer #'m/edn-btree-key-serializer)
 
+(def map-listener #'m/map-listener)
+(def make-listener-spec #'m/make-listener-spec)
+
 (definterface+ IMapDB
   (db        [this] "Returns the underlying db")
   (close!    [this] "Closes this db")
@@ -33,7 +36,9 @@
   (options   [this] "Returns the options this db was created with"))
 
 (definterface+ IBindable
-  (bind      [this typ secondary fun] "Binds secondary collection with fn"))
+  (bind            [this typ secondary fun] "Binds secondary collection with fn")
+  (add-listener    [this listener] "Adds a listener to this collection")
+  (remove-listener [this listener] "Removes a listener from this collection"))
 
 (def-abstract-type MapColl
   IMapDB
@@ -46,7 +51,9 @@
   (storage   [this] (throw (UnsupportedOperationException.)))
   (options   [this] (throw (UnsupportedOperationException.)))
   IBindable
-  (bind  [this typ secondary fun] (m/bind typ (.coll this) secondary fun))
+  (bind            [this typ secondary fun] (m/bind typ (.coll this) secondary fun))
+  (add-listener    [this listener] (m/add-listener (.coll this) listener))
+  (remove-listener [this listener] (m/remove-listener (.coll this) listener))
   clojure.lang.Counted
   (count [this] (.size ^Map (.coll this)))
   clojure.lang.ILookup
