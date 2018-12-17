@@ -26,7 +26,7 @@ The library proposes for now two flavours of maps, backed by memory or disk, as 
 	(f/update! hm :foo inc) ;; {:foo 43}
 	(rollback! hm) ;; {} everything rolledback
 	(assoc! hm [:composite :key] 56) ;; {[:composite :key] 56}
-	(commit! hm) ;; changes are persisted to disk§/memory
+	(commit! hm) ;; changes are persisted to disk/memory
 	)
 ```
 
