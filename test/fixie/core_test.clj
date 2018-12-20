@@ -215,3 +215,13 @@
     (Thread/sleep 300)
     (is (= (:slow hm) 42))
     (close hm) => nil))
+
+(deftest missing-serializer
+  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                             :tree-map "tree-map-tests"
+                             {:counter-enable? true
+                              :key-serializer :nippy
+                              :value-serializer :nippy})]
+    (facts
+     (assoc! hm :foo [45 98]) =throws=> clojure.lang.ExceptionInfo
+     (close hm) => nil)))

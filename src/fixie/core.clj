@@ -154,10 +154,32 @@
    :string-orighash    org.mapdb.Serializer/STRING_ORIGHASH
    :uuid               org.mapdb.Serializer/UUID})
 
+(def ^:private ns-to-require (atom #{}))
+
+(defmacro conditional-body
+  [namespace & body]
+  (let [maybe-ex (try (require [namespace]) (catch Exception e e))]
+    (if (instance? Exception maybe-ex)
+      `(fn [n#] (throw (ex-info (format "Could not find class or file for ns %s" ~(str namespace))
+                                {:namespace ~(str namespace)})))
+      (do
+        (swap! ns-to-require conj namespace)
+        `(do ~@body)))))
+
+(doseq [n @ns-to-require]
+  (require [n]))
+
 (def ^:private composite-serializers
   {:edn {:raw-serializer :string
          :wrapper-serializer {:encoder (fn mapdb-edn-encoder [v] (pr-str v))
-                              :decoder (fn mapdb-edn-decoder [v] (edn/read-string v))}}})
+                              :decoder (fn mapdb-edn-decoder [v] (edn/read-string v))}}
+   :nippy {:raw-serializer :byte-array
+           :wrapper-serializer {:encoder (conditional-body taoensso.nippy
+                                                           (fn mapdb-nippy-encoder [v]
+                                                             (taoensso.nippy/freeze v)))
+                                :decoder (conditional-body taoensso.nippy
+                                                           (fn mapdb-nippy-decoder [v]
+                                                             (taoensso.nippy/thaw v)))}}})
 
 (sdef-enum :mapdb/standard-serializer-type (into #{} (keys serializers)))
 (sdef-enum :mapdb/composite-serializer-type (into #{} (keys composite-serializers)))
