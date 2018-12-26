@@ -49,7 +49,7 @@
     (facts
      (get-collection-type hm) => :hash-map
      (get-collection-name hm) => "hash-map-tests"
-     (get-collection-options => {:counter-enable? true}))))
+     (get-collection-options hm) =in=> {:counter-enable? true})))
 
 (deftest hash-map-coll-ops
   (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
