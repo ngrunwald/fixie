@@ -1,0 +1,2 @@
+{:known-macros [clojure.spec.alpha/fdef]
+ :known-namespaces [taoensso.nippy cheshire.core]}

@@ -17,8 +17,8 @@
     (close db)))
 
 (deftest hash-map-basic-tests
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
-                             :hash-map "hash-map-tests" {:counter-enable? true})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
+                                   :hash-map "hash-map-tests" {:counter-enable? true})]
     (facts
      (get-collection-name hm) => "hash-map-tests"
      (get-db hm) => #(instance? org.mapdb.DB %)
@@ -44,14 +44,19 @@
      @(dissoc! hm :bar :nobod :foo) => {}
      (empty? hm) => true
      (count hm) => 0
-     (close hm) => nil)))
+     @(empty! hm) => {}))
+  (with-open [hm (open-collection! :hash-map "hash-map-tests")]
+    (facts
+     (get-collection-type hm) => :hash-map
+     (get-collection-name hm) => "hash-map-tests"
+     (get-collection-options => {:counter-enable? true}))))
 
 (deftest hash-map-coll-ops
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
-                             :hash-map "hash-map-tests"
-                             {:counter-enable? true
-                              :key-serializer :long
-                              :value-serializer :long})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
+                                   :hash-map "hash-map-tests"
+                                   {:counter-enable? true
+                                    :key-serializer :long
+                                    :value-serializer :long})]
     (facts
      (seq hm) => nil
 
@@ -67,15 +72,14 @@
 
      (map identity hm) =in=> ^:in-any-order [[1 1] [2 2] [3 3]]
 
-     (seq hm) =in=> ^:in-any-order [[1 1] [2 2] [3 3]]
-     (close hm) => nil)))
+     (seq hm) =in=> ^:in-any-order [[1 1] [2 2] [3 3]])))
 
 (deftest hash-map-custom-serializers
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
-                             :hash-map "hash-map-tests"
-                             {:counter-enable? true
-                              :key-serializer :edn
-                              :value-serializer :edn})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
+                                   :hash-map "hash-map-tests"
+                                   {:counter-enable? true
+                                    :key-serializer :edn
+                                    :value-serializer :edn})]
     (facts
      (get-collection-options hm) =in=> {:key-serializer-wrapper
                                         {:encoder fn?
@@ -87,13 +91,12 @@
                                         :value-serializer :string}
      @(assoc! hm {:mykey 42} {:myval 42}) => {{:mykey 42} {:myval 42}}
      (hm {:mykey 42}) => {:myval 42}
-     (map identity hm) =in=> ^:in-any-order [[{:mykey 42} {:myval 42}]]
-     (close hm) => nil)))
+     (map identity hm) =in=> ^:in-any-order [[{:mykey 42} {:myval 42}]])))
 
 (deftest hash-map-concurrency
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
-                             :hash-map "hash-map-tests"
-                             {:counter-enable? true})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                   :hash-map "hash-map-tests"
+                                   {:counter-enable? true})]
     (assoc! hm :slow 0)
     (future
       (facts
@@ -101,13 +104,12 @@
     (Thread/sleep 100)
     (assoc! hm :slow 42)
     (Thread/sleep 300)
-    (is (= (:slow hm) 42))
-    (close hm)))
+    (is (= (:slow hm) 42))))
 
 (deftest hash-map-transaction
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
-                             :hash-map "hash-map-tests"
-                             {:counter-enable? true})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                   :hash-map "hash-map-tests"
+                                   {:counter-enable? true})]
     (facts
      @(assoc! hm :0 0) => {:0 0}
      (commit! hm) => any
@@ -115,11 +117,9 @@
      (rollback! hm) => any
      @hm => {:0 0})))
 
-
-
 (deftest tree-map-basic-tests
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
-                             :tree-map "tree-map-tests" {:counter-enable? true})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
+                                   :tree-map "tree-map-tests" {:counter-enable? true})]
     (facts
      (get-collection-name hm) => "tree-map-tests"
      (get-db hm) => #(instance? org.mapdb.DB %)
@@ -145,14 +145,14 @@
      @(dissoc! hm :bar :nobod :foo) => {}
      (empty? hm) => true
      (count hm) => 0
-     (close hm) => nil)))
+     @(empty! hm) => {})))
 
 (deftest tree-map-coll-ops
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
-                             :tree-map "tree-map-tests"
-                             {:counter-enable? true
-                              :key-serializer :long
-                              :value-serializer :long})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
+                                   :tree-map "tree-map-tests"
+                                   {:counter-enable? true
+                                    :key-serializer :long
+                                    :value-serializer :long})]
     (facts
      (seq hm) => nil
 
@@ -171,23 +171,21 @@
      (seq hm) =in=> ^:in-any-order [[1 1] [2 2] [3 3]])
 
     ;; test :initial-content
-    (let [hm2 (open-collection! {:db-type :temp-file :transaction-enable? false}
-                                :tree-map "tree-map-tests"
-                                {:counter-enable? true
-                                 :key-serializer :long
-                                 :value-serializer :long
-                                 :initial-content hm})]
+    (with-open [hm2 (open-collection! {:db-type :temp-file :transaction-enable? false}
+                                      :tree-map "tree-map-tests"
+                                      {:counter-enable? true
+                                       :key-serializer :long
+                                       :value-serializer :long
+                                       :initial-content hm})]
       (facts
-       (seq hm2) => (seq hm)
-       (close hm2) => nil
-       (close hm) => nil))))
+       (seq hm2) => (seq hm)))))
 
 (deftest tree-map-custom-serializers
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
-                             :tree-map "tree-map-tests"
-                             {:counter-enable? true
-                              :key-serializer :edn
-                              :value-serializer :edn})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
+                                   :tree-map "tree-map-tests"
+                                   {:counter-enable? true
+                                    :key-serializer :edn
+                                    :value-serializer :edn})]
     (facts
      (get-collection-options hm) =in=> {:key-serializer-wrapper
                                         {:encoder fn?
@@ -199,13 +197,12 @@
                                         :value-serializer :string}
      @(assoc! hm {:mykey 42} {:myval 42}) => {{:mykey 42} {:myval 42}}
      (hm {:mykey 42}) => {:myval 42}
-     (map identity hm) =in=> ^:in-any-order [[{:mykey 42} {:myval 42}]]
-     (close hm) => nil)))
+     (map identity hm) =in=> ^:in-any-order [[{:mykey 42} {:myval 42}]])))
 
 (deftest tree-map-concurrency
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
-                             :tree-map "tree-map-tests"
-                             {:counter-enable? true})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                   :tree-map "tree-map-tests"
+                                   {:counter-enable? true})]
     (assoc! hm :slow 0)
     (future
       (facts
@@ -213,15 +210,42 @@
     (Thread/sleep 100)
     (assoc! hm :slow 42)
     (Thread/sleep 300)
-    (is (= (:slow hm) 42))
-    (close hm) => nil))
+    (is (= (:slow hm) 42))))
 
 (deftest missing-serializer
-  (let [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
-                             :tree-map "tree-map-tests"
-                             {:counter-enable? true
-                              :key-serializer :nippy
-                              :value-serializer :nippy})]
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                   :tree-map "tree-map-tests"
+                                   {:counter-enable? true
+                                    :key-serializer :nippy
+                                    :value-serializer :nippy})]
     (facts
-     (assoc! hm :foo [45 98]) =throws=> clojure.lang.ExceptionInfo
-     (close hm) => nil)))
+     (assoc! hm :foo [45 98]) =throws=> clojure.lang.ExceptionInfo)))
+
+(deftest custom-serializer
+    (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                     :tree-map "tree-map-tests"
+                                     {:key-serializer :edn
+                                      :value-serializer {:raw-serializer :string
+                                                         :wrapper-serializer
+                                                         {:encoder (fn mapdb-edn-encoder [v]
+                                                                     (pr-str v))
+                                                          :decoder (fn mapdb-edn-decoder [v]
+                                                                     (read-string v))}}})]
+    (facts
+     @(assoc! hm :foo [45 98]) => {:foo [45 98]})))
+
+
+(deftest test-into
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                   :hash-map "hash-map-tests")
+              tm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                   :tree-map "tree-map-tests")]
+    (let [add-map {:foo 42 :bar {'baz "str"}}
+          add-keys [[:foo 42] [:bar {'baz "str"}]]]
+      (facts
+       @(into! hm add-map) => add-map
+       @(empty! hm) => {}
+       @(into! hm add-keys) => add-map
+       @(into! tm add-map) => add-map
+       @(empty! tm) => {}
+       @(into! tm add-keys) => add-map))))

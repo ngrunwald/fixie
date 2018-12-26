@@ -7,7 +7,8 @@
                  [org.mapdb/mapdb "3.0.7"]]
   :profiles {:dev {:dependencies [[metosin/testit "0.3.0"]
                                   [orchestra "2018.12.06-2"]
-                                  [expound "0.7.1"]]}
+                                  [expound "0.7.2"]
+                                  [org.clojure/test.check "0.10.0-alpha3"]]}
              :kaocha {:dependencies [[lambdaisland/kaocha "0.0-319"]
                                      [lambdaisland/kaocha-cloverage "0.0-22"]]}}
   :aliases {"kaocha" ["with-profile" "+kaocha" "run" "-m" "kaocha.runner"]})

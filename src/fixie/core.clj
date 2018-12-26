@@ -23,8 +23,7 @@
 
 (defmacro ^:private sdef-enum
   [nam enum]  
-  (let []
-    `(s/def ~nam ~(eval enum))))
+  `(s/def ~nam ~(eval enum)))
 
 (def ^:private mapdb-types {:file (fn [{:keys [file]}]
                           (let [f (io/file file)]
@@ -116,43 +115,43 @@
   ([] (open-database! {:db-type :heap})))
 
 (def ^:private serializers
-  {:big-decimal        org.mapdb.Serializer/BIG_DECIMAL
-   :big-integer        org.mapdb.Serializer/BIG_INTEGER
-   :boolean            org.mapdb.Serializer/BOOLEAN
-   :byte               org.mapdb.Serializer/BYTE
-   :byte-array         org.mapdb.Serializer/BYTE_ARRAY
-   :byte-array-delta   org.mapdb.Serializer/BYTE_ARRAY_DELTA
-   :byte-array-nosize  org.mapdb.Serializer/BYTE_ARRAY_NOSIZE
-   :char               org.mapdb.Serializer/CHAR
-   :char-array         org.mapdb.Serializer/CHAR_ARRAY
-   :class              org.mapdb.Serializer/CLASS
-   :date               org.mapdb.Serializer/DATE
-   :double             org.mapdb.Serializer/DOUBLE
-   :double-array       org.mapdb.Serializer/DOUBLE_ARRAY
-   :elsa               org.mapdb.Serializer/ELSA
-   :float              org.mapdb.Serializer/FLOAT
-   :float-array        org.mapdb.Serializer/FLOAT_ARRAY
-   :illegal-access     org.mapdb.Serializer/ILLEGAL_ACCESS
-   :integer            org.mapdb.Serializer/INTEGER
-   :integer-delta      org.mapdb.Serializer/INTEGER_DELTA
-   :integer-packed     org.mapdb.Serializer/INTEGER_PACKED
-   :int-array          org.mapdb.Serializer/INT_ARRAY
-   :java               org.mapdb.Serializer/JAVA ; NB java object serialization, the default
-   :long               org.mapdb.Serializer/LONG
-   :long-array         org.mapdb.Serializer/LONG_ARRAY
-   :long-delta         org.mapdb.Serializer/LONG_DELTA
-   :long-packed        org.mapdb.Serializer/LONG_PACKED
-   :recid              org.mapdb.Serializer/RECID
-   :recid-array        org.mapdb.Serializer/RECID_ARRAY
-   :short              org.mapdb.Serializer/SHORT
-   :short-array        org.mapdb.Serializer/SHORT_ARRAY
-   :string             org.mapdb.Serializer/STRING
-   :string-ascii       org.mapdb.Serializer/STRING_ASCII
-   :string-delta       org.mapdb.Serializer/STRING_DELTA
-   :string-intern      org.mapdb.Serializer/STRING_INTERN
-   :string-nosize      org.mapdb.Serializer/STRING_NOSIZE
-   :string-orighash    org.mapdb.Serializer/STRING_ORIGHASH
-   :uuid               org.mapdb.Serializer/UUID})
+  {:big-decimal        Serializer/BIG_DECIMAL
+   :big-integer        Serializer/BIG_INTEGER
+   :boolean            Serializer/BOOLEAN
+   :byte               Serializer/BYTE
+   :byte-array         Serializer/BYTE_ARRAY
+   :byte-array-delta   Serializer/BYTE_ARRAY_DELTA
+   :byte-array-nosize  Serializer/BYTE_ARRAY_NOSIZE
+   :char               Serializer/CHAR
+   :char-array         Serializer/CHAR_ARRAY
+   :class              Serializer/CLASS
+   :date               Serializer/DATE
+   :double             Serializer/DOUBLE
+   :double-array       Serializer/DOUBLE_ARRAY
+   :elsa               Serializer/ELSA
+   :float              Serializer/FLOAT
+   :float-array        Serializer/FLOAT_ARRAY
+   :illegal-access     Serializer/ILLEGAL_ACCESS
+   :integer            Serializer/INTEGER
+   :integer-delta      Serializer/INTEGER_DELTA
+   :integer-packed     Serializer/INTEGER_PACKED
+   :int-array          Serializer/INT_ARRAY
+   :java               Serializer/JAVA ; NB java object serialization, the default
+   :long               Serializer/LONG
+   :long-array         Serializer/LONG_ARRAY
+   :long-delta         Serializer/LONG_DELTA
+   :long-packed        Serializer/LONG_PACKED
+   :recid              Serializer/RECID
+   :recid-array        Serializer/RECID_ARRAY
+   :short              Serializer/SHORT
+   :short-array        Serializer/SHORT_ARRAY
+   :string             Serializer/STRING
+   :string-ascii       Serializer/STRING_ASCII
+   :string-delta       Serializer/STRING_DELTA
+   :string-intern      Serializer/STRING_INTERN
+   :string-nosize      Serializer/STRING_NOSIZE
+   :string-orighash    Serializer/STRING_ORIGHASH
+   :uuid               Serializer/UUID})
 
 (def ^:private ns-to-require (atom #{}))
 
@@ -179,7 +178,14 @@
                                                              (taoensso.nippy/freeze v)))
                                 :decoder (conditional-body taoensso.nippy
                                                            (fn mapdb-nippy-decoder [v]
-                                                             (taoensso.nippy/thaw v)))}}})
+                                                             (taoensso.nippy/thaw v)))}}
+   :json {:raw-serializer :string
+          :wrapper-serializer {:encoder (conditional-body cheshire.core
+                                                           (fn mapdb-json-encoder [v]
+                                                             (cheshire.core/encode v)))
+                                :decoder (conditional-body cheshire.core
+                                                           (fn mapdb-json-decoder [v]
+                                                             (cheshire.core/decode v true)))}}})
 
 (sdef-enum :mapdb/standard-serializer-type (into #{} (keys serializers)))
 (sdef-enum :mapdb/composite-serializer-type (into #{} (keys composite-serializers)))
@@ -188,10 +194,8 @@
 
 (s/def :mapdb.coll/raw-serializer (s/or :standard-serializer :mapdb/standard-serializer-type
                                         :native-serializer #(instance? Serializer %)))
-(s/def :mapdb.coll/encoder (s/fspec :args (s/cat :arg any?)
-                                    :ret any?))
-(s/def :mapdb.coll/decoder (s/fspec :args (s/cat :arg any?)
-                                    :ret any?))
+(s/def :mapdb.coll/encoder any?)
+(s/def :mapdb.coll/decoder any?)
 (s/def :mapdb.coll/wrapper-serializer (s/keys :req-un [:mapdb.coll/encoder
                                                        :mapdb.coll/decoder]))
 (s/def :mapdb.coll/composite-serializer (s/keys :req-un [:mapdb.coll/raw-serializer
@@ -249,7 +253,7 @@
                        :value-serializer :java}
                       opts)
         hmap   (.hashMap db (name hashmap-name))]
-    (configure-maker! hashmap-options hmap opts)
+    (configure-maker! hashmap-options hmap params)
     (.createOrOpen hmap)))
 
 (defprotocol PDatabase
@@ -279,7 +283,8 @@
   (get-collection-type [this])
   (get-collection-options [this])
   (get-wrapper-serializers [this])
-  (compact! [this] "Compacts the underlying storage to reclaim space and performance lost to fragmentattion."))
+  (compact! [this] "Compacts the underlying storage to reclaim space and performance lost to fragmentattion.")
+  (empty! [this] "Empties the contents of the collection."))
 
 (extend-protocol PCloseable
   DB
@@ -340,11 +345,37 @@
   (let [[top & left] ks]
     (update! m top (fn [old] (update-in old left #(apply f % args))))))
 
+(s/def :mapdb.coll/collection #(or (instance? clojure.lang.ITransientMap %)
+                                   (instance? clojure.lang.ITransientSet %)))
+
+(s/fdef into!
+  :args (s/cat :to :mapdb.coll/collection
+               :from coll?)
+  :fn #(= (:ret %) (-> % :args :to))
+  :ret :mapdb.coll/collection)
+
+(defn into!
+  "Merges given collection into the fixie datastructure."
+  [to from]
+  (let [adder (cond (instance? clojure.lang.ITransientMap to)
+                    #(assoc! %1 (first %2) (second %2))
+
+                    (instance? clojure.lang.ITransientSet to)
+                    conj!
+
+                    :else (throw (ex-info (format "Data type %s not recognized by into!" (type to))
+                                          {:data-type (type to)})))]
+    (doseq [x from]
+      (adder to x))
+    to))
+
 (defn- merge-serializers
   [options]
   (reduce
    (fn [acc [label v]]
-     (if-let [{:keys [raw-serializer wrapper-serializer]} (composite-serializers v)]
+     (if-let [{:keys [raw-serializer wrapper-serializer]} (if (keyword? v)
+                                                            (composite-serializers v)
+                                                            v)]
        (assoc acc
               label raw-serializer
               (keyword (str (name label) "-wrapper")) wrapper-serializer)
@@ -443,6 +474,7 @@
                                 :value-encoder value-encoder
                                 :value-decoder value-decoder})
   (compact! [this] (.. db getStore compact) this)
+  (empty! [this] (.clear hm) this)
   clojure.lang.IDeref
   (deref [_] (let [^java.util.Iterator iter (.. hm entrySet iterator)]
                (loop [ret (transient {})]
@@ -543,6 +575,7 @@
                                 :value-encoder value-encoder
                                 :value-decoder value-decoder})
   (compact! [this] (.. db getStore compact) this)
+  (empty! [this] (.clear tm) this)
   clojure.lang.IDeref
   (deref [_] (let [^java.util.Iterator iter (.. tm entryIterator)]
                (loop [ret (transient {})]
@@ -588,7 +621,7 @@
                        :value-serializer :java}
                       opts)
         tmap   (.treeMap db (name treemap-name))]
-    (configure-maker! treemap-options tmap opts)
+    (configure-maker! treemap-options tmap params)
     (if initial-content
       (.createFrom tmap (.iterator ^Iterable (map (fn [[k v]] (kotlin.Pair. k v))
                                                   (reverse initial-content))))
@@ -629,7 +662,7 @@
                                :db-instance #(instance? DB %)))
 
 (s/fdef open-collection!
-  :args (s/cat :db :mapdb/db-or-spec
+  :args (s/cat :db (s/? :mapdb/db-or-spec)
                :collection-type :mapdb/collection-type
                :collection-name (s/or :string-name string?
                                       :keyword-name keyword?)
@@ -663,4 +696,5 @@
      (wrapper-builder db db-or-spec (name collection-name) raw-hm
                       (assoc merged :collection-type collection-type)
                       serializers (atom {::name (name collection-name)}))))
-  ([db-or-spec collection-type collection-name] (open-collection! db-or-spec collection-type collection-name {:counter-enable? true})))
+  ([db-or-spec collection-type collection-name] (open-collection! db-or-spec collection-type collection-name {:counter-enable? true}))
+  ([collection-type collection-name] (open-collection! {:db-type :heap} collection-type collection-name {:counter-enable? true})))
