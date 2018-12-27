@@ -279,3 +279,29 @@
      (hm :bar) => 3
      @(update! hm :baz inc) =in=> {:baz 4}
      @hm => {:foo 3 :bar 3 :baz 4})))
+
+(deftest expiration-size-test
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                   :hash-map "hash-map-tests"
+                                   {:expire-max-size 1
+                                    :expire-executor 2
+                                    :expire-executor-period 10
+                                    :expire-after-create nil})]
+    (assoc! hm :toto 42)
+    (assoc! hm :bar 50)
+    (assoc! hm :baz 50)
+    (assoc! hm :titi 67)
+    (Thread/sleep 100)
+    (facts
+     (count hm) => #(< % 4))))
+
+(deftest expiration-time-test
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                   :hash-map "hash-map-tests"
+                                   {:expire-after-create [10 :ms]
+                                    :expire-executor 2
+                                    :expire-executor-period 10})]
+    (assoc! hm :toto 42)
+    (Thread/sleep 100)
+    (facts
+     (count hm) => 0)))

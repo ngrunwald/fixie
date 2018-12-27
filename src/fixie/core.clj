@@ -5,6 +5,7 @@
   (:import [org.mapdb DBMaker DBMaker$Maker DB DB$HashMapMaker
             HTreeMap DB$TreeMapMaker BTreeMap Serializer MapExtra
             MapModificationListener]
+           [java.util.concurrent TimeUnit ScheduledExecutorService Executors]
            [kotlin.jvm.functions Function1]))
 
 (defn- configure-maker!
@@ -227,8 +228,16 @@
                                                           (fn mapdb-json-decoder [v]
                                                             (cheshire.core/decode v true)))}}})
 
+(def time-units
+  {:ms TimeUnit/MILLISECONDS
+   :s TimeUnit/SECONDS
+   :m TimeUnit/MINUTES
+   :h TimeUnit/HOURS
+   :d TimeUnit/DAYS})
+
 (sdef-enum :mapdb/standard-serializer-type (into #{} (map first serializers)))
 (sdef-enum :mapdb/composite-serializer-type (into #{} (map first composite-serializers)))
+(sdef-enum :mapdb/time-unit (into #{} (map first time-units)))
 
 (s/def :mapdb.coll/counter-enable? boolean?)
 
@@ -254,10 +263,25 @@
                                               :mapdb.hashmap/node-size
                                               :mapdb.hashmap/levels]))
 (s/def :mapdb.hashmap/hash-seed int?)
-
 (s/def :mapdb.hashmap/modification-listener fn?)
 (s/def :mapdb.hashmap/expire-overflow #(instance? java.util.Map %))
 (s/def :mapdb.hashmap/value-loader fn?)
+(s/def :mapdb.hashmap/time-spec (s/or :duration-in-ms int?
+                                      :duration-with-unit
+                                      (s/cat :duration int?
+                                             :unit (s/or :unit-kw :mapdb/time-unit
+                                                         :unit-enum #(instance? TimeUnit %)))))
+(s/def :mapdb.hashmap/expire-after-create (s/nilable :mapdb.hashmap/time-spec))
+(s/def :mapdb.hashmap/expire-after-get (s/nilable :mapdb.hashmap/time-spec))
+(s/def :mapdb.hashmap/expire-after-update (s/nilable :mapdb.hashmap/time-spec))
+(s/def :mapdb.hashmap/full-time-spec (s/cat :duration int?
+                                            :unit #(instance? TimeUnit %)))
+(s/def :mapdb.hashmap/expire-compact-threshold float?)
+(s/def :mapdb.hashmap/expire-executor (s/or :threads-count int?
+                                            :instance #(instance? ScheduledExecutorService %)))
+(s/def :mapdb.hashmap/expire-executor-period int?)
+(s/def :mapdb.hashmap/expire-max-size int?)
+(s/def :mapdb.hashmap/expire-store-size int?)
 
 (s/def :mapdb.hashmap/options (s/keys :opt-un [:mapdb.coll/counter-enable?
                                                :mapdb.coll/value-serializer
@@ -267,7 +291,25 @@
                                                :mapdb.hashmap/modification-listener
                                                :mapdb.hashmap/expire-overflow
                                                :mapdb.hashmap/value-loader
-                                               ]))
+                                               :mapdb.hashmap/expire-after-create
+                                               :mapdb.hashmap/expire-after-get
+                                               :mapdb.hashmap/expire-after-update
+                                               :mapdb.hashmap/expire-compact-threshold
+                                               :mapdb.hashmap/expire-executor
+                                               :mapdb.hashmap/expire-executor-period
+                                               :mapdb.hashmap/expire-max-size
+                                               :mapdb.hashmap/expire-store-size]))
+
+(s/fdef to-time-spec
+  :args (s/cat :time-spec :mapdb.hashmap/time-spec)
+  :ret :mapdb.hashmap/full-time-spec)
+
+(defn to-time-spec
+  [v]
+  (if (sequential? v)
+    (let [unit (second v)]
+      [(first v) (if (keyword? unit) (time-units unit) unit)])
+    [(first v) (time-units :ms)]))
 
 (def ^:private hashmap-options
   {:counter-enable? (boolean-setter counterEnable org.mapdb.DB$HashMapMaker)
@@ -298,7 +340,34 @@
    :expire-overflow (fn [^DB$HashMapMaker dbm m]
                       (.expireOverflow dbm m))
    :value-loader (fn [^DB$HashMapMaker dbm f]
-                      (.valueLoader dbm (make-value-loader f)))})
+                   (.valueLoader dbm (make-value-loader f)))
+   :expire-after-create (fn [^DB$HashMapMaker dbm v]
+                          (if (nil? v)
+                            (.expireAfterCreate dbm)
+                            (let [[duration unit] (to-time-spec v)]
+                              (.expireAfterCreate dbm duration unit))))
+   :expire-after-get (fn [^DB$HashMapMaker dbm v]
+                       (if (nil? v)
+                         (.expireAfterGet dbm)
+                         (let [[duration unit] (to-time-spec v)] 
+                          (.expireAfterGet dbm duration unit))))
+   :expire-after-update (fn [^DB$HashMapMaker dbm v]
+                          (if (nil? v)
+                            (.expireAfterUpdate dbm)
+                            (let [[duration unit] (to-time-spec v)] 
+                             (.expireAfterUpdate dbm duration unit))))
+   :expire-compact-threshold (fn [^DB$HashMapMaker dbm v]
+                               (.expireOverflow dbm v))
+   :expire-executor (fn [^DB$HashMapMaker dbm v]
+                      (if (int? v)
+                        (.expireExecutor dbm (Executors/newScheduledThreadPool v))
+                        (.expireExecutor dbm v)))
+   :expire-executor-period (fn [^DB$HashMapMaker dbm v]
+                             (.expireExecutorPeriod dbm v))
+   :expire-max-size (fn [^DB$HashMapMaker dbm v]
+                      (.expireMaxSize dbm v))
+   :expire-store-size (fn [^DB$HashMapMaker dbm v]
+                      (.expireStoreSize dbm v))})
 
 (s/fdef open-raw-treemap!
   :args (s/cat :db #(instance? DB %)
