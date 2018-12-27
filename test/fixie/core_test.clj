@@ -6,7 +6,7 @@
    [orchestra.spec.test :as st]
    [expound.alpha :as expound]))
 
-(set! *warn-on-reflection* true)
+(set! *warn-on-reflection* false)
 (set! clojure.spec.alpha/*explain-out* expound/printer)
 (st/instrument)
 
@@ -249,3 +249,21 @@
        @(into! tm add-map) => add-map
        @(empty! tm) => {}
        @(into! tm add-keys) => add-map))))
+
+(deftest modification-listener
+  (let [res (atom nil)]
+    (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                     :hash-map "hash-map-tests"
+                                     {:modification-listener
+                                      (fn [k old-v new-v triggered?]
+                                        (reset! res [k old-v new-v triggered?]))})]
+      (facts
+       @(assoc! hm :foo 42) => {:foo 42}
+       @res => [:foo nil 42 false]
+       @(empty! hm) => {}
+       @res => [:foo nil 42 false]
+       @(assoc! hm :foo 42) => {:foo 42}
+       @(update! hm :foo inc) => {:foo 43}
+       @res => [:foo 42 43 false]
+       @(empty! hm true) => {}
+       @res => [:foo 43 nil true]))))

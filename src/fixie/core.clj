@@ -3,15 +3,17 @@
             [clojure.edn :as edn]
             [clojure.spec.alpha :as s])
   (:import [org.mapdb DBMaker DBMaker$Maker DB DB$HashMapMaker
-            HTreeMap DB$TreeMapMaker BTreeMap Serializer MapExtra]))
+            HTreeMap DB$TreeMapMaker BTreeMap Serializer MapExtra
+            MapModificationListener]))
 
 (defn- configure-maker!
   [opts-map dbm opts]
   (doseq [setter-name (keys opts)
           :let [setter (opts-map setter-name)]
           :when setter
-          :let [value (opts setter-name)]]
-   (setter dbm value)))
+          :let [with-options? (::with-options? (meta setter))
+                arg (if with-options? opts (opts setter-name))]]
+   (setter dbm arg)))
 
 (defmacro ^:private boolean-setter
   [meth tag]
@@ -24,6 +26,28 @@
 (defmacro ^:private sdef-enum
   [nam enum]  
   `(s/def ~nam ~(eval enum)))
+
+(defprotocol PDatabase
+  (make-db [it] "Returns a `org.mapdb.DB` from the given arg."))
+
+(defprotocol PTransactionable
+  (commit! [this] "Commits the changes to storage up to this point of time.")
+  (rollback! [this] "Rollbacks all changes since the last commit."))
+
+(defprotocol PCloseable
+  (close [this] "Closes the underlying db. Necessary to avoid corruption if transaction are disabled."))
+
+(defprotocol PMapDBBased
+  (get-db [this])
+  (get-db-options [this])
+  (get-db-type [this])
+  (get-collection [this])
+  (get-collection-name [this])
+  (get-collection-type [this])
+  (get-collection-options [this])
+  (get-wrapper-serializers [this])
+  (compact! [this] "Compacts the underlying storage to reclaim space and performance lost to fragmentattion.")
+  (empty! [this] [this notify-listener?] "Empties the contents of the collection and signals listener or not."))
 
 (def ^:private mapdb-types {:file (fn [{:keys [file]}]
                           (let [f (io/file file)]
@@ -68,7 +92,7 @@
 (s/def :mapdb/transaction-enable? boolean?)
 (s/def :mapdb/file (s/or :path string?
                          :file #(instance? java.io.File %)))
-(sdef-enum :mapdb/db-type (into #{} (keys mapdb-types)))
+(sdef-enum :mapdb/db-type (into #{} (map first mapdb-types)))
 
 (defmulti db-type :db-type)
 
@@ -168,6 +192,15 @@
 (doseq [n @ns-to-require]
   (require [n]))
 
+(defn make-modification-listener
+  [{:keys [value-serializer-wrapper key-serializer-wrapper] :as opts} f]
+  (reify
+    MapModificationListener
+    (modify [this k old-val new-val triggered?]
+      (let [key-decoder (:decoder key-serializer-wrapper)
+            value-decoder (:decoder value-serializer-wrapper)]
+        (f (key-decoder k) (value-decoder old-val) (value-decoder new-val) triggered?)))))
+
 (def ^:private composite-serializers
   {:edn {:raw-serializer :string
          :wrapper-serializer {:encoder (fn mapdb-edn-encoder [v] (pr-str v))
@@ -183,12 +216,12 @@
           :wrapper-serializer {:encoder (conditional-body cheshire.core
                                                            (fn mapdb-json-encoder [v]
                                                              (cheshire.core/encode v)))
-                                :decoder (conditional-body cheshire.core
-                                                           (fn mapdb-json-decoder [v]
-                                                             (cheshire.core/decode v true)))}}})
+                               :decoder (conditional-body cheshire.core
+                                                          (fn mapdb-json-decoder [v]
+                                                            (cheshire.core/decode v true)))}}})
 
-(sdef-enum :mapdb/standard-serializer-type (into #{} (keys serializers)))
-(sdef-enum :mapdb/composite-serializer-type (into #{} (keys composite-serializers)))
+(sdef-enum :mapdb/standard-serializer-type (into #{} (map first serializers)))
+(sdef-enum :mapdb/composite-serializer-type (into #{} (map first composite-serializers)))
 
 (s/def :mapdb.coll/counter-enable? boolean?)
 
@@ -215,11 +248,14 @@
                                               :mapdb.hashmap/levels]))
 (s/def :mapdb.hashmap/hash-seed int?)
 
+(s/def :mapdb.hashmap/modification-listener fn?)
+
 (s/def :mapdb.hashmap/options (s/keys :opt-un [:mapdb.coll/counter-enable?
                                                :mapdb.coll/value-serializer
                                                :mapdb.coll/key-serializer
                                                :mapdb.hashmap/layout
-                                               :mapdb.hashmap/hash-seed]))
+                                               :mapdb.hashmap/hash-seed
+                                               :mapdb.hashmap/modification-listener]))
 
 (def ^:private hashmap-options
   {:counter-enable? (boolean-setter counterEnable org.mapdb.DB$HashMapMaker)
@@ -238,7 +274,15 @@
                       levels 4}}]
              (.layout dbm concurrency node-size levels))
    :hash-seed (fn [^DB$HashMapMaker dbm seed]
-                (.hashSeed dbm seed))})
+                (.hashSeed dbm seed))
+   :modification-listener (vary-meta
+                           (fn [^DB$HashMapMaker dbm {:keys [modification-listener] :as opts}]
+                             (.modificationListener dbm
+                                                    (make-modification-listener
+                                                     (select-keys opts [:value-serializer-wrapper
+                                                                        :key-serializer-wrapper])
+                                                     modification-listener)))
+                            assoc ::with-options? true)})
 
 (s/fdef open-raw-treemap!
   :args (s/cat :db #(instance? DB %)
@@ -250,14 +294,13 @@
 (defn open-raw-hashmap!
   [^DB db hashmap-name opts]
   (let [params (merge {:key-serializer :java
-                       :value-serializer :java}
+                       :value-serializer :java
+                       :key-serializer-wrapper {:encoder identity :decoder identity}
+                       :value-serializer-wrapper {:encoder identity :decoder identity}}
                       opts)
         hmap   (.hashMap db (name hashmap-name))]
     (configure-maker! hashmap-options hmap params)
     (.createOrOpen hmap)))
-
-(defprotocol PDatabase
-  (make-db [it] "Returns a `org.mapdb.DB` from the given arg."))
 
 (extend-protocol PDatabase
   DB
@@ -266,25 +309,6 @@
   (make-db [opts] (open-database! opts))
   nil
   (make-db [_] (open-database!)))
-
-(defprotocol PTransactionable
-  (commit! [this] "Commits the changes to storage up to this point of time.")
-  (rollback! [this] "Rollbacks all changes since the last commit."))
-
-(defprotocol PCloseable
-  (close [this] "Closes the underlying db. Necessary to avoid corruption if transaction are disabled."))
-
-(defprotocol PMapDBBased
-  (get-db [this])
-  (get-db-options [this])
-  (get-db-type [this])
-  (get-collection [this])
-  (get-collection-name [this])
-  (get-collection-type [this])
-  (get-collection-options [this])
-  (get-wrapper-serializers [this])
-  (compact! [this] "Compacts the underlying storage to reclaim space and performance lost to fragmentattion.")
-  (empty! [this] "Empties the contents of the collection."))
 
 (extend-protocol PCloseable
   DB
@@ -474,7 +498,12 @@
                                 :value-encoder value-encoder
                                 :value-decoder value-decoder})
   (compact! [this] (.. db getStore compact) this)
-  (empty! [this] (.clear hm) this)
+  (empty! [this] (empty! this false))
+  (empty! [this notify-listener?]
+    (if notify-listener?
+      (.clearWithExpire hm)
+      (.clearWithoutNotification hm))
+    this)
   clojure.lang.IDeref
   (deref [_] (let [^java.util.Iterator iter (.. hm entrySet iterator)]
                (loop [ret (transient {})]
@@ -576,6 +605,7 @@
                                 :value-decoder value-decoder})
   (compact! [this] (.. db getStore compact) this)
   (empty! [this] (.clear tm) this)
+  (empty! [this _] (.clear tm) this)
   clojure.lang.IDeref
   (deref [_] (let [^java.util.Iterator iter (.. tm entryIterator)]
                (loop [ret (transient {})]
@@ -618,7 +648,9 @@
 (defn open-raw-treemap!
   [^DB db treemap-name {:keys [initial-content] :as opts}]
   (let [params (merge {:key-serializer :java
-                       :value-serializer :java}
+                       :value-serializer :java
+                       :key-serializer-wrapper {:encoder identity :decoder identity}
+                       :value-serializer-wrapper {:encoder identity :decoder identity}}
                       opts)
         tmap   (.treeMap db (name treemap-name))]
     (configure-maker! treemap-options tmap params)
