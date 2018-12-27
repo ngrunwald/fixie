@@ -260,10 +260,22 @@
       (facts
        @(assoc! hm :foo 42) => {:foo 42}
        @res => [:foo nil 42 false]
+       (reset! res nil) => nil
        @(empty! hm) => {}
-       @res => [:foo nil 42 false]
-       @(assoc! hm :foo 42) => {:foo 42}
-       @(update! hm :foo inc) => {:foo 43}
-       @res => [:foo 42 43 false]
+       @res => nil
+       @(assoc! hm :bar 42) => {:bar 42}
+       @(update! hm :bar inc) => {:bar 43}
+       @res => [:bar 42 43 false]
        @(empty! hm true) => {}
-       @res => [:foo 43 nil true]))))
+       @res => [:bar 43 nil true]))))
+
+(deftest value-loader
+  (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? true}
+                                   :hash-map "hash-map-tests"
+                                   {:value-loader
+                                    (fn [k] (count (name k)))})]
+    (facts
+     (get hm :foo) => 3
+     (hm :bar) => 3
+     @(update! hm :baz inc) =in=> {:baz 4}
+     @hm => {:foo 3 :bar 3 :baz 4})))

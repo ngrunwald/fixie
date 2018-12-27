@@ -4,7 +4,8 @@
             [clojure.spec.alpha :as s])
   (:import [org.mapdb DBMaker DBMaker$Maker DB DB$HashMapMaker
             HTreeMap DB$TreeMapMaker BTreeMap Serializer MapExtra
-            MapModificationListener]))
+            MapModificationListener]
+           [kotlin.jvm.functions Function1]))
 
 (defn- configure-maker!
   [opts-map dbm opts]
@@ -193,13 +194,19 @@
   (require [n]))
 
 (defn make-modification-listener
-  [{:keys [value-serializer-wrapper key-serializer-wrapper] :as opts} f]
+  [{:keys [value-serializer-wrapper key-serializer-wrapper]} f]
   (reify
     MapModificationListener
     (modify [this k old-val new-val triggered?]
       (let [key-decoder (:decoder key-serializer-wrapper)
             value-decoder (:decoder value-serializer-wrapper)]
         (f (key-decoder k) (value-decoder old-val) (value-decoder new-val) triggered?)))))
+
+(defn make-value-loader
+  [f]
+  (reify
+    Function1
+    (invoke [thtois k] (f k))))
 
 (def ^:private composite-serializers
   {:edn {:raw-serializer :string
@@ -249,13 +256,18 @@
 (s/def :mapdb.hashmap/hash-seed int?)
 
 (s/def :mapdb.hashmap/modification-listener fn?)
+(s/def :mapdb.hashmap/expire-overflow #(instance? java.util.Map %))
+(s/def :mapdb.hashmap/value-loader fn?)
 
 (s/def :mapdb.hashmap/options (s/keys :opt-un [:mapdb.coll/counter-enable?
                                                :mapdb.coll/value-serializer
                                                :mapdb.coll/key-serializer
                                                :mapdb.hashmap/layout
                                                :mapdb.hashmap/hash-seed
-                                               :mapdb.hashmap/modification-listener]))
+                                               :mapdb.hashmap/modification-listener
+                                               :mapdb.hashmap/expire-overflow
+                                               :mapdb.hashmap/value-loader
+                                               ]))
 
 (def ^:private hashmap-options
   {:counter-enable? (boolean-setter counterEnable org.mapdb.DB$HashMapMaker)
@@ -282,7 +294,11 @@
                                                      (select-keys opts [:value-serializer-wrapper
                                                                         :key-serializer-wrapper])
                                                      modification-listener)))
-                            assoc ::with-options? true)})
+                           assoc ::with-options? true)
+   :expire-overflow (fn [^DB$HashMapMaker dbm m]
+                      (.expireOverflow dbm m))
+   :value-loader (fn [^DB$HashMapMaker dbm f]
+                      (.valueLoader dbm (make-value-loader f)))})
 
 (s/fdef open-raw-treemap!
   :args (s/cat :db #(instance? DB %)
