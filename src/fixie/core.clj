@@ -36,9 +36,6 @@
   (commit! [this] "Commits the changes to storage up to this point of time.")
   (rollback! [this] "Rollbacks all changes since the last commit."))
 
-(defprotocol PCloseable
-  (close [this] "Closes the underlying db. Necessary to avoid corruption if transaction are disabled."))
-
 (defprotocol PMapDBBased
   (get-db [this])
   (get-db-options [this])
@@ -395,10 +392,6 @@
   nil
   (make-db [_] (open-database!)))
 
-(extend-protocol PCloseable
-  DB
-  (close [this] (.close this)) )
-
 (extend-protocol PTransactionable
   DB
   (commit! [this] (.commit this))
@@ -453,6 +446,10 @@
   [m ks f & args]
   (let [[top & left] ks]
     (update! m top (fn [old] (update-in old left #(apply f % args))))))
+
+(defn close!
+  [^java.io.Closeable m]
+  (.close m))
 
 (s/def :mapdb.coll/collection #(or (instance? clojure.lang.ITransientMap %)
                                    (instance? clojure.lang.ITransientSet %)))
@@ -568,7 +565,7 @@
   PTransactionable
   (commit! [this] (.commit db) this)
   (rollback! [this] (.rollback db) this)
-  PCloseable
+  java.io.Closeable
   (close [_] (.close db))
   PMapDBBased
   (get-db ^DB [_] db)
@@ -674,7 +671,7 @@
   PTransactionable
   (commit! [this] (.commit db) this)
   (rollback! [this] (.rollback db) this)
-  PCloseable
+  java.io.Closeable
   (close [_] (.close db))
   PMapDBBased
   (get-db ^DB [_] db)

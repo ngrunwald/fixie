@@ -14,7 +14,7 @@
   (doseq [db-type [:memory :direct-memory :heap :temp-file]
           :let [db (make-db {:db-type db-type})]]
     (is (instance? org.mapdb.DB db))
-    (close db)))
+    (close! db)))
 
 (deftest hash-map-basic-tests
   (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
