@@ -134,7 +134,7 @@
                                       :node-size 16
                                       :page-size (* 2 1024)}
      stm => {:foo 42 :bay 65}
-     stm =not=> {:foo 42}
+     stm =not=> {:foo 42 :bay 66}
      (empty? stm) => false
      (count stm) => 2
      (:foo stm) => 42

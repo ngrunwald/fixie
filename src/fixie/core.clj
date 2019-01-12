@@ -857,7 +857,9 @@
   (equiv [this o] (and (instance? java.util.Map o)
                        (let [^java.util.Map other-map o]
                          (and (= (.size other-map) (.size stm))
-                              (every? #(.get other-map %) (.keySet this))))))
+                              (every? (fn [^clojure.lang.MapEntry entry]
+                                        (= (.get other-map (key entry)) (val entry)))
+                                      (.entrySet this))))))
   (cons [_ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
   (count [_] (.sizeLong stm))
   clojure.lang.IMapIterable
