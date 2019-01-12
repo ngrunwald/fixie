@@ -7,7 +7,8 @@
             MapModificationListener SortedTableMap SortedTableMap$Companion$Maker]
            [org.mapdb.volume MappedFileVol ByteArrayVol ByteBufferMemoryVol Volume]
            [java.util.concurrent TimeUnit ScheduledExecutorService Executors]
-           [kotlin.jvm.functions Function1]))
+           [kotlin.jvm.functions Function1]
+           [java.util Map]))
 
 (defn- configure-maker!
   [opts-map dbm opts]
@@ -83,53 +84,53 @@
    :transaction-enable? (boolean-setter transactionEnable
                                         org.mapdb.DBMaker$Maker)})
 
-(s/def :mapdb/file-mmap-enable-if-supported? boolean?)
-(s/def :mapdb/read-only? boolean?)
-(s/def :mapdb/checksum-header-bypass? boolean?)
-(s/def :mapdb/checksum-store-enable? boolean?)
-(s/def :mapdb/cleaner-hack-enable? boolean?)
-(s/def :mapdb/close-on-jvm-shutdown? boolean?)
-(s/def :mapdb/close-on-jvm-shutdown-weak-ref? boolean?)
-(s/def :mapdb/concurrency-scale int?)
-(s/def :mapdb/executor-enable? boolean?)
-(s/def :mapdb/transaction-enable? boolean?)
-(s/def :mapdb/path (s/or :path string?
+(s/def :fixie.db/file-mmap-enable-if-supported? boolean?)
+(s/def :fixie.db/read-only? boolean?)
+(s/def :fixie.db/checksum-header-bypass? boolean?)
+(s/def :fixie.db/checksum-store-enable? boolean?)
+(s/def :fixie.db/cleaner-hack-enable? boolean?)
+(s/def :fixie.db/close-on-jvm-shutdown? boolean?)
+(s/def :fixie.db/close-on-jvm-shutdown-weak-ref? boolean?)
+(s/def :fixie.db/concurrency-scale int?)
+(s/def :fixie.db/executor-enable? boolean?)
+(s/def :fixie.db/transaction-enable? boolean?)
+(s/def :fixie.db/path (s/or :path string?
                          :file #(instance? java.io.File %)))
-(sdef-enum :mapdb/db-type (into #{} (map first mapdb-types)))
+(sdef-enum :fixie.db/db-type (into #{} (map first mapdb-types)))
 
 (defmulti db-type :db-type)
 
 (defmethod db-type :file [_]
-  (s/keys :req-un [:mapdb/db-type
-                   :mapdb/path]
-          :opt-un [:mapdb/file-mmap-enable-if-supported?
-                   :mapdb/read-only?
-                   :mapdb/checksum-header-bypass?
-                   :mapdb/checksum-store-enable?
-                   :mapdb/cleaner-hack-enable?
-                   :mapdb/close-on-jvm-shutdown?
-                   :mapdb/close-on-jvm-shutdown-weak-ref?
-                   :mapdb/concurrency-scale
-                   :mapdb/executor-enable?
-                   :mapdb/transaction-enable?]))
+  (s/keys :req-un [:fixie.db/db-type
+                   :fixie.db/path]
+          :opt-un [:fixie.db/file-mmap-enable-if-supported?
+                   :fixie.db/read-only?
+                   :fixie.db/checksum-header-bypass?
+                   :fixie.db/checksum-store-enable?
+                   :fixie.db/cleaner-hack-enable?
+                   :fixie.db/close-on-jvm-shutdown?
+                   :fixie.db/close-on-jvm-shutdown-weak-ref?
+                   :fixie.db/concurrency-scale
+                   :fixie.db/executor-enable?
+                   :fixie.db/transaction-enable?]))
 
 (defmethod db-type :default [_]
-  (s/keys :req-un [:mapdb/db-type]
-          :opt-un [:mapdb/file-mmap-enable-if-supported?
-                   :mapdb/read-only?
-                   :mapdb/checksum-header-bypass?
-                   :mapdb/checksum-store-enable?
-                   :mapdb/cleaner-hack-enable?
-                   :mapdb/close-on-jvm-shutdown?
-                   :mapdb/close-on-jvm-shutdown-weak-ref?
-                   :mapdb/concurrency-scale
-                   :mapdb/executor-enable?
-                   :mapdb/transaction-enable?]))
+  (s/keys :req-un [:fixie.db/db-type]
+          :opt-un [:fixie.db/file-mmap-enable-if-supported?
+                   :fixie.db/read-only?
+                   :fixie.db/checksum-header-bypass?
+                   :fixie.db/checksum-store-enable?
+                   :fixie.db/cleaner-hack-enable?
+                   :fixie.db/close-on-jvm-shutdown?
+                   :fixie.db/close-on-jvm-shutdown-weak-ref?
+                   :fixie.db/concurrency-scale
+                   :fixie.db/executor-enable?
+                   :fixie.db/transaction-enable?]))
 
-(s/def :mapdb/options (s/multi-spec db-type :db-type))
+(s/def :fixie.db/options (s/multi-spec db-type :db-type))
 
 (s/fdef open-database!
-  :args (s/cat :options (s/? :mapdb/options))
+  :args (s/cat :options (s/? :fixie.db/options))
   :ret #(instance? DB %))
 
 (defn open-database!
@@ -239,74 +240,74 @@
    :h TimeUnit/HOURS
    :d TimeUnit/DAYS})
 
-(sdef-enum :mapdb/standard-serializer-type (into #{} (map first serializers)))
-(sdef-enum :mapdb/composite-serializer-type (into #{} (map first composite-serializers)))
-(sdef-enum :mapdb/time-unit (into #{} (map first time-units)))
+(sdef-enum :fixie/standard-serializer-type (into #{} (map first serializers)))
+(sdef-enum :fixie/composite-serializer-type (into #{} (map first composite-serializers)))
+(sdef-enum :fixie/time-unit (into #{} (map first time-units)))
 
-(s/def :mapdb.coll/counter-enable? boolean?)
+(s/def :fixie.coll/counter-enable? boolean?)
 
-(s/def :mapdb.coll/raw-serializer (s/or :standard-serializer :mapdb/standard-serializer-type
+(s/def :fixie.coll/raw-serializer (s/or :standard-serializer :fixie/standard-serializer-type
                                         :native-serializer #(instance? Serializer %)))
-(s/def :mapdb.coll/encoder any?)
-(s/def :mapdb.coll/decoder any?)
-(s/def :mapdb.coll/wrapper-serializer (s/keys :req-un [:mapdb.coll/encoder
-                                                       :mapdb.coll/decoder]))
-(s/def :mapdb.coll/composite-serializer (s/keys :req-un [:mapdb.coll/raw-serializer
-                                                         :mapdb.coll/wrapper-serializer]))
-(s/def :mapdb.coll/serializer (s/or :raw-serializer :mapdb.coll/raw-serializer
-                                    :predefined-composite-serializer :mapdb/composite-serializer-type
-                                    :composite-serializer :mapdb.coll/composite-serializer))
+(s/def :fixie.coll/encoder any?)
+(s/def :fixie.coll/decoder any?)
+(s/def :fixie.coll/wrapper-serializer (s/keys :req-un [:fixie.coll/encoder
+                                                       :fixie.coll/decoder]))
+(s/def :fixie.coll/composite-serializer (s/keys :req-un [:fixie.coll/raw-serializer
+                                                         :fixie.coll/wrapper-serializer]))
+(s/def :fixie.coll/serializer (s/or :raw-serializer :fixie.coll/raw-serializer
+                                    :predefined-composite-serializer :fixie/composite-serializer-type
+                                    :composite-serializer :fixie.coll/composite-serializer))
 
-(s/def :mapdb.coll/value-serializer :mapdb.coll/serializer)
-(s/def :mapdb.coll/key-serializer :mapdb.coll/serializer)
+(s/def :fixie.coll/value-serializer :fixie.coll/serializer)
+(s/def :fixie.coll/key-serializer :fixie.coll/serializer)
 
-(s/def :mapdb.hashmap/concurrency int?)
-(s/def :mapdb.hashmap/node-size int?)
-(s/def :mapdb.hashmap/levels int?)
-(s/def :mapdb.hashmap/layout (s/keys :req-un [:mapdb.hashmap/concurrency
-                                              :mapdb.hashmap/node-size
-                                              :mapdb.hashmap/levels]))
-(s/def :mapdb.hashmap/hash-seed int?)
-(s/def :mapdb.hashmap/modification-listener fn?)
-(s/def :mapdb.hashmap/expire-overflow #(instance? java.util.Map %))
-(s/def :mapdb.hashmap/value-loader fn?)
-(s/def :mapdb.hashmap/time-spec (s/or :duration-in-ms int?
+(s/def :fixie.hashmap/concurrency int?)
+(s/def :fixie.hashmap/node-size int?)
+(s/def :fixie.hashmap/levels int?)
+(s/def :fixie.hashmap/layout (s/keys :req-un [:fixie.hashmap/concurrency
+                                              :fixie.hashmap/node-size
+                                              :fixie.hashmap/levels]))
+(s/def :fixie.hashmap/hash-seed int?)
+(s/def :fixie.hashmap/modification-listener fn?)
+(s/def :fixie.hashmap/expire-overflow #(instance? java.util.Map %))
+(s/def :fixie.hashmap/value-loader fn?)
+(s/def :fixie.hashmap/time-spec (s/or :duration-in-ms int?
                                       :duration-with-unit
                                       (s/cat :duration int?
-                                             :unit (s/or :unit-kw :mapdb/time-unit
+                                             :unit (s/or :unit-kw :fixie/time-unit
                                                          :unit-enum #(instance? TimeUnit %)))))
-(s/def :mapdb.hashmap/expire-after-create (s/nilable :mapdb.hashmap/time-spec))
-(s/def :mapdb.hashmap/expire-after-get (s/nilable :mapdb.hashmap/time-spec))
-(s/def :mapdb.hashmap/expire-after-update (s/nilable :mapdb.hashmap/time-spec))
-(s/def :mapdb.hashmap/full-time-spec (s/cat :duration int?
+(s/def :fixie.hashmap/expire-after-create (s/nilable :fixie.hashmap/time-spec))
+(s/def :fixie.hashmap/expire-after-get (s/nilable :fixie.hashmap/time-spec))
+(s/def :fixie.hashmap/expire-after-update (s/nilable :fixie.hashmap/time-spec))
+(s/def :fixie.hashmap/full-time-spec (s/cat :duration int?
                                             :unit #(instance? TimeUnit %)))
-(s/def :mapdb.hashmap/expire-compact-threshold float?)
-(s/def :mapdb.hashmap/expire-executor (s/or :threads-count int?
+(s/def :fixie.hashmap/expire-compact-threshold float?)
+(s/def :fixie.hashmap/expire-executor (s/or :threads-count int?
                                             :instance #(instance? ScheduledExecutorService %)))
-(s/def :mapdb.hashmap/expire-executor-period int?)
-(s/def :mapdb.hashmap/expire-max-size int?)
-(s/def :mapdb.hashmap/expire-store-size int?)
+(s/def :fixie.hashmap/expire-executor-period int?)
+(s/def :fixie.hashmap/expire-max-size int?)
+(s/def :fixie.hashmap/expire-store-size int?)
 
-(s/def :mapdb.hashmap/options (s/keys :opt-un [:mapdb.coll/counter-enable?
-                                               :mapdb.coll/value-serializer
-                                               :mapdb.coll/key-serializer
-                                               :mapdb.hashmap/layout
-                                               :mapdb.hashmap/hash-seed
-                                               :mapdb.hashmap/modification-listener
-                                               :mapdb.hashmap/expire-overflow
-                                               :mapdb.hashmap/value-loader
-                                               :mapdb.hashmap/expire-after-create
-                                               :mapdb.hashmap/expire-after-get
-                                               :mapdb.hashmap/expire-after-update
-                                               :mapdb.hashmap/expire-compact-threshold
-                                               :mapdb.hashmap/expire-executor
-                                               :mapdb.hashmap/expire-executor-period
-                                               :mapdb.hashmap/expire-max-size
-                                               :mapdb.hashmap/expire-store-size]))
+(s/def :fixie.hashmap/options (s/keys :opt-un [:fixie.coll/counter-enable?
+                                               :fixie.coll/value-serializer
+                                               :fixie.coll/key-serializer
+                                               :fixie.hashmap/layout
+                                               :fixie.hashmap/hash-seed
+                                               :fixie.hashmap/modification-listener
+                                               :fixie.hashmap/expire-overflow
+                                               :fixie.hashmap/value-loader
+                                               :fixie.hashmap/expire-after-create
+                                               :fixie.hashmap/expire-after-get
+                                               :fixie.hashmap/expire-after-update
+                                               :fixie.hashmap/expire-compact-threshold
+                                               :fixie.hashmap/expire-executor
+                                               :fixie.hashmap/expire-executor-period
+                                               :fixie.hashmap/expire-max-size
+                                               :fixie.hashmap/expire-store-size]))
 
 (s/fdef to-time-spec
-  :args (s/cat :time-spec :mapdb.hashmap/time-spec)
-  :ret :mapdb.hashmap/full-time-spec)
+  :args (s/cat :time-spec :fixie.hashmap/time-spec)
+  :ret :fixie.hashmap/full-time-spec)
 
 (defn to-time-spec
   [v]
@@ -377,7 +378,7 @@
   :args (s/cat :db #(instance? DB %)
                :hashmap-name (s/or :string-name string?
                                    :keyword-name keyword?)
-               :options :mapdb.hashmap/options)
+               :options :fixie.hashmap/options)
   :ret #(instance? HTreeMap %))
 
 (defn open-raw-hashmap!
@@ -453,14 +454,14 @@
   [^java.io.Closeable m]
   (.close m))
 
-(s/def :mapdb.coll/collection #(or (instance? clojure.lang.ITransientMap %)
+(s/def :fixie.coll/collection #(or (instance? clojure.lang.ITransientMap %)
                                    (instance? clojure.lang.ITransientSet %)))
 
 (s/fdef into!
-  :args (s/cat :to :mapdb.coll/collection
+  :args (s/cat :to :fixie.coll/collection
                :from coll?)
   :fn #(= (:ret %) (-> % :args :to))
-  :ret :mapdb.coll/collection)
+  :ret :fixie.coll/collection)
 
 (defn into!
   "Merges given collection into the fixie datastructure."
@@ -711,15 +712,15 @@
                      (recur (assoc! ret (key-decoder (.getKey kv)) (value-decoder (.getValue kv)))))
                    (persistent! ret))))))
 
-(s/def :mapdb.treemap/values-outside-nodes-enable? boolean?)
-(s/def :mapdb.treemap/max-node-size int?)
-(s/def :mapdb.treemap/initial-state (s/coll-of #(instance? java.util.Map$Entry %)))
-(s/def :mapdb.treemap/options (s/keys :opt-un [:mapdb.coll/counter-enable?
-                                               :mapdb.coll/value-serializer
-                                               :mapdb.coll/key-serializer
-                                               :mapdb.treemap/values-outside-nodes-enable?
-                                               :mapdb.treemap/max-node-size
-                                               :mapdb.treemap/initial-state]))
+(s/def :fixie.treemap/values-outside-nodes-enable? boolean?)
+(s/def :fixie.treemap/max-node-size int?)
+(s/def :fixie.treemap/initial-content any?)
+(s/def :fixie.treemap/options (s/keys :opt-un [:fixie.coll/counter-enable?
+                                               :fixie.coll/value-serializer
+                                               :fixie.coll/key-serializer
+                                               :fixie.treemap/values-outside-nodes-enable?
+                                               :fixie.treemap/max-node-size
+                                               :fixie.treemap/initial-content]))
 
 (def ^:private treemap-options
   {:counter-enable? (boolean-setter counterEnable org.mapdb.DB$TreeMapMaker)
@@ -739,7 +740,7 @@
   :args (s/cat :db #(instance? DB %)
                :treemap-name (s/or :string-name string?
                                    :keyword-name keyword?)
-               :options :mapdb.treemap/options)
+               :options :fixie.treemap/options)
   :ret #(instance? BTreeMap %))
 
 (defn open-raw-treemap!
@@ -786,17 +787,17 @@
                                               value-encoder value-decoder
                                               (atom {::name (name nam)})))}})
 
-(sdef-enum :mapdb/collection-type (into #{} (keys collection-types)))
-(s/def :mapdb/db-or-spec (s/or :db-spec :mapdb/options 
+(sdef-enum :fixie.coll/collection-type (into #{} (keys collection-types)))
+(s/def :fixie.db/db-or-spec (s/or :db-spec :fixie.db/options 
                                :db-instance #(instance? DB %)))
 
 (s/fdef open-collection!
-  :args (s/cat :db (s/? :mapdb/db-or-spec)
-               :collection-type :mapdb/collection-type
+  :args (s/cat :db (s/? :fixie.db/db-or-spec)
+               :collection-type :fixie.coll/collection-type
                :collection-name (s/or :string-name string?
                                       :keyword-name keyword?)
-               :options (s/? (s/or :mapdb.hashmap/options
-                                   :mapdb.treemap/options)))
+               :options (s/? (s/or :fixie.hashmap/options
+                                   :fixie.treemap/options)))
   :ret #(satisfies? PMapDBTransient %))
 
 (defn open-collection!
@@ -835,20 +836,30 @@
                             key-encoder key-decoder
                             value-encoder value-decoder
                             metadata]
-  clojure.lang.IPersistentMap
+  clojure.lang.Associative
   (assoc [_ _ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
-  (without [_ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (entryAt [_ k] (let [v (.get stm (key-encoder k))]
+                   (if v
+                     (clojure.lang.MapEntry. k (value-decoder v))
+                     nil)))
+  (containsKey [_ k] (.containsKey stm (key-encoder k)))
   (valAt [_ k] (value-decoder (.get stm (key-encoder k))))
   (valAt [_ k default] (let [ke (key-encoder k)]
                          (if (.containsKey stm ke)
                            (value-decoder (.get stm ke))
                            default)))
-  (conj [_ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (seq [this] (when-not (.isEmpty stm)
+                (let [trx (map (fn [^java.util.Map$Entry kv]
+                                 (clojure.lang.MapEntry. (key-decoder (.getKey kv))
+                                                         (value-decoder (.getValue kv)))))]
+                  (sequence trx (iterator-seq (.. stm descendingEntryIterator))))))
+  (empty [_] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (equiv [this o] (and (instance? java.util.Map o)
+                       (let [^java.util.Map other-map o]
+                         (and (= (.size other-map) (.size stm))
+                              (every? #(.get other-map %) (.keySet this))))))
+  (cons [_ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
   (count [_] (.sizeLong stm))
-  clojure.lang.ITransientAssociative2
-  (containsKey [_ k] (.containsKey stm (key-encoder k)))
-  (entryAt [this k] (let [v (.valAt this k)]
-                      (clojure.lang.MapEntry. k v)))
   clojure.lang.IMapIterable
   (keyIterator [_] (let [trx (map key-decoder)]
                      (.iterator ^Iterable (eduction trx (iterator-seq (.descendingKeyIterator stm))))))
@@ -859,12 +870,28 @@
                                  (clojure.lang.MapEntry. (key-decoder (.getKey entry))
                                                          (value-decoder (.getValue entry)))))]
                   (.iterator ^Iterable (eduction trx (iterator-seq (.entryIterator stm))))))
-  clojure.lang.Seqable
-  (seq [this] (when-not (.isEmpty stm)
-                (let [trx (map (fn [^java.util.Map$Entry kv]
-                                 (clojure.lang.MapEntry. (key-decoder (.getKey kv))
-                                                         (value-decoder (.getValue kv)))))]
-                  (sequence trx (iterator-seq (.. stm descendingEntryIterator))))))
+  java.util.Map
+  (clear [this] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (containsValue [_ k] (.containsValue stm (value-encoder k)))
+  (entrySet [_] (let [entries (.entrySet stm)
+                      trx (map (fn [^java.util.Map$Entry entry]
+                                 (clojure.lang.MapEntry.
+                                  (key-encoder (.getKey entry))
+                                  (value-encoder (.getValue entry)))))]
+                  (into #{} trx entries)))
+  (equals [this o] (identical? this o))
+  (get [this k] (.get stm (key-encoder k)))
+  (hashCode [this] (hash-ordered-coll this))
+  (isEmpty [this] (.isEmpty stm))
+  (keySet [this] (let [ks (.keySet stm)
+                       trx (map key-decoder)]
+                   (into #{} trx ks)))
+  (put [_ _ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (putAll [_ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (remove [_ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (size [_] (.size stm))
+  (values [_] (let [values (.getValues stm)]
+                (map value-decoder values)))
   clojure.lang.IFn
   (invoke [this k] (.valAt this k))
   (invoke [this k default] (.valAt this k default))
@@ -944,48 +971,94 @@
    :node-size (fn [^org.mapdb.SortedTableMap$Companion$Maker stm size]
                 (.nodeSize stm size))})
 
+(sdef-enum :fixie.volume/volume-type (into #{} (keys volume-types)))
+(s/def :fixie.volume/path string?)
+
+(s/def :fixie.volume/options (s/keys :req-un [:fixie.volume/volume-type]
+                                     :opt-un [:fixie.volume/path]))
+
+(s/def :fixie.sorted-table-map/node-size int?)
+(s/def :fixie.sorted-table-map/page-size int?)
+(s/def :fixie.sorted-table-map/content any?)
+(s/def :fixie.volume/volume #(instance? Volume %))
+(s/def :fixie.volume/volume-or-spec (s/or :volume :fixie.volume/volume
+                                          :spec :fixie.volume/options))
+
+(s/def :fixie.sorted-table-map/options (s/keys :opt-un [:fixie.sorted-table-map/content
+                                                        :fixie.sorted-table-map/node-size
+                                                        :fixie.sorted-table-map/page-size
+                                                        :fixie.coll/key-serializer
+                                                        :fixie.coll/value-serializer]))
+
+(s/fdef open-sorted-table-map!
+  :args (s/cat :volume :fixie.volume/volume-or-spec
+               :options (s/? :fixie.sorted-table-map/options))
+  :ret #(satisfies? PMapDBPersistent %))
+
 (defn open-sorted-table-map!
-  [{:keys [volume-type] :as vol-opts}
-   {:keys [content] :as opts}]
-  (let [vol ((volume-types volume-type) vol-opts)
-        {:keys [key-serializer-wrapper value-serializer-wrapper
-                key-serializer value-serializer]} (merge-serializers opts)
-        {:keys [key-encoder value-encoder
-                key-decoder value-decoder]
-         :or {key-encoder identity value-encoder identity
-              key-decoder identity value-decoder identity}}
-        (-> {}
-            (cond-> (:encoder key-serializer-wrapper)
-              (assoc :key-encoder
-                     (:encoder key-serializer-wrapper)))
-            (cond-> (:decoder key-serializer-wrapper)
-              (assoc :key-decoder
-                     (:decoder key-serializer-wrapper)))
-            (cond-> (:encoder value-serializer-wrapper)
-              (assoc :value-encoder
-                     (:encoder value-serializer-wrapper)))
-            (cond-> (:decoder value-serializer-wrapper)
-              (assoc :value-decoder
-                     (:decoder value-serializer-wrapper))))]
-    (let [stm (if (not= volume-type :read-only-file)
-                (let [stm-build (SortedTableMap/create vol
-                                                       (if (instance? Serializer key-serializer)
-                                                         key-serializer
-                                                         (serializers key-serializer))
-                                                       (if (instance? Serializer value-serializer)
-                                                         value-serializer
-                                                         (serializers value-serializer)))]
-                  (configure-maker! sorted-table-map-options stm-build opts)
-                  (let [sink (.createFromSink stm-build)]
-                    (doseq [[k v] (sort-by first content)]
-                      (.put sink (key-encoder k) (value-encoder v)))
-                    (.create sink)))
-                (SortedTableMap/open vol
-                                     (if (instance? Serializer key-serializer)
-                                       key-serializer
-                                       (serializers key-serializer))
-                                     (if (instance? Serializer value-serializer)
-                                       value-serializer
-                                       (serializers value-serializer))))]
-      (->CljSortedTableMap vol vol-opts stm (dissoc opts :content) key-encoder key-decoder value-encoder
-                               value-decoder (atom {})))))
+  ([{:keys [volume-type] :as vol-opts}
+    {original-value-serializer :value-serializer
+     original-key-serializer :key-serializer
+     :keys [content]
+     :or {original-key-serializer :java original-value-serializer :java}
+     :as opts}]
+   (let [vol ((volume-types volume-type) vol-opts)
+         {:keys [key-serializer-wrapper value-serializer-wrapper
+                 key-serializer value-serializer]} (merge-serializers opts)
+         {:keys [key-encoder value-encoder
+                 key-decoder value-decoder]
+          :or {key-encoder identity value-encoder identity
+               key-decoder identity value-decoder identity}}
+         (-> {}
+             (cond-> (:encoder key-serializer-wrapper)
+               (assoc :key-encoder
+                      (:encoder key-serializer-wrapper)))
+             (cond-> (:decoder key-serializer-wrapper)
+               (assoc :key-decoder
+                      (:decoder key-serializer-wrapper)))
+             (cond-> (:encoder value-serializer-wrapper)
+               (assoc :value-encoder
+                      (:encoder value-serializer-wrapper)))
+             (cond-> (:decoder value-serializer-wrapper)
+               (assoc :value-decoder
+                      (:decoder value-serializer-wrapper))))]
+     (let [stm (if (not= volume-type :read-only-file)
+                 (let [stm-build (SortedTableMap/create vol
+                                                        (if (instance? Serializer key-serializer)
+                                                          key-serializer
+                                                          (if key-serializer
+                                                            (serializers key-serializer)
+                                                            (serializers original-key-serializer)))
+                                                        (if (instance? Serializer value-serializer)
+                                                          value-serializer
+                                                          (if value-serializer
+                                                            (serializers value-serializer)
+                                                            (serializers original-value-serializer))))]
+                   (configure-maker! sorted-table-map-options stm-build opts)
+                   (let [sink (.createFromSink stm-build)]
+                     (doseq [[k v] (sort-by first content)]
+                       (.put sink (key-encoder k) (value-encoder v)))
+                     (.create sink)))
+                 (SortedTableMap/open vol
+                                      (if (instance? Serializer key-serializer)
+                                        key-serializer
+                                        (serializers key-serializer))
+                                      (if (instance? Serializer value-serializer)
+                                        value-serializer
+                                        (serializers value-serializer))))]
+       (->CljSortedTableMap vol vol-opts stm
+                            (-> opts
+                                (dissoc :content)
+                                (assoc :key-serializer original-key-serializer
+                                       :value-serializer original-value-serializer))
+                            key-encoder key-decoder value-encoder
+                            value-decoder (atom vol-opts)))))
+  ([volume-opts] (open-sorted-table-map! volume-opts {})))
+
+(def ^:private pr-on #'clojure.core/pr-on)
+(def ^:private print-meta #'clojure.core/print-meta)
+(def ^:private print-map #'clojure.core/print-map)
+
+(defmethod print-method CljSortedTableMap [m, ^java.io.Writer w]
+  (print-meta m w)
+  (print-map m pr-on w))
