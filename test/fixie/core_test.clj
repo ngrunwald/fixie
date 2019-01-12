@@ -117,6 +117,32 @@
      (rollback! hm) => any
      @hm => {:0 0})))
 
+(deftest sorted-table-map-basic-tests
+  (with-open [stm (open-sorted-table-map! {:volume-type :memory}
+                                          {:content {:foo 42 :bay 65}
+                                           :value-serializer :long
+                                           :key-serializer :keyword
+                                           :node-size 16
+                                           :page-size (* 2 1024)})]
+    (facts
+     (get-db stm) => #(instance? org.mapdb.volume.Volume %)
+     (get-db-options stm) =in=> {:volume-type :memory}
+     (get-collection stm) => #(instance? org.mapdb.SortedTableMap %)
+     (.getPageSize (get-collection stm)) => (* 2 1024)
+     (get-collection-options stm) => {:value-serializer :long
+                                      :key-serializer :keyword
+                                      :node-size 16
+                                      :page-size (* 2 1024)}
+     (empty? stm) => false
+     (count stm) => 2
+     (:foo stm) => 42
+     (stm :foo) => 42
+     (get stm :foo) => 42
+     (stm :not-here :default) => :default
+     (keys stm) =in=> ^:in-any-order [:bay :foo]
+     (vals stm) =in=> ^:in-any-order [42 65]
+     @stm => {:foo 42 :bay 65})))
+
 (deftest tree-map-basic-tests
   (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}
                                    :tree-map "tree-map-tests" {:counter-enable? true})]
@@ -178,7 +204,48 @@
                                        :value-serializer :long
                                        :initial-content hm})]
       (facts
-       (seq hm2) => (seq hm)))))
+       (seq hm2) => (seq hm)
+       (get-collection-options hm2) => {:counter-enable? true
+                                        :key-serializer :long
+                                        :value-serializer :long
+                                        :collection-type :tree-map}))))
+
+(deftest sorted-table-map-coll-ops
+  (with-open [stm (open-sorted-table-map! {:volume-type :memory}
+                                          {:content {:foo 42 :bay 65}
+                                           :value-serializer :long
+                                           :key-serializer :keyword})]
+    (facts
+     (seq stm) => [[:foo 42] [:bay 65]]
+
+     (reduce-kv
+      (fn [acc k v] (assoc acc k (inc v)))
+      {} stm) => {:foo 43 :bay 66}
+
+     (reduce
+      (fn [acc [k v]] (assoc acc k (inc v)))
+      {} stm) => {:foo 43 :bay 66}
+
+     (map identity stm) =>  [[:foo 42] [:bay 65]])))
+
+(deftest sorted-table-map-on-file
+  (let [temp (java.io.File/createTempFile "test-mapdb-stm" "mdb")
+        path (.getPath temp)]
+    (with-open [stm (open-sorted-table-map! {:volume-type :file
+                                             :path path}
+                                            {:content {:foo 42 :bay 65}
+                                             :value-serializer :long
+                                             :key-serializer :keyword})]
+      (facts
+       (stm :foo) => 42
+       (.isReadOnly (get-db stm)) => false))
+    (with-open [stm (open-sorted-table-map! {:volume-type :read-only-file
+                                             :path path}
+                                            {:value-serializer :long
+                                             :key-serializer :keyword})]
+      (facts
+       (stm :foo) => 42
+       (.isReadOnly (get-db stm)) => true))))
 
 (deftest tree-map-custom-serializers
   (with-open [hm (open-collection! {:db-type :temp-file :transaction-enable? false}

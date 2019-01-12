@@ -4,7 +4,8 @@
             [clojure.spec.alpha :as s])
   (:import [org.mapdb DBMaker DBMaker$Maker DB DB$HashMapMaker
             HTreeMap DB$TreeMapMaker BTreeMap Serializer MapExtra
-            MapModificationListener]
+            MapModificationListener SortedTableMap SortedTableMap$Companion$Maker]
+           [org.mapdb.volume MappedFileVol ByteArrayVol ByteBufferMemoryVol Volume]
            [java.util.concurrent TimeUnit ScheduledExecutorService Executors]
            [kotlin.jvm.functions Function1]))
 
@@ -36,26 +37,29 @@
   (commit! [this] "Commits the changes to storage up to this point of time.")
   (rollback! [this] "Rollbacks all changes since the last commit."))
 
-(defprotocol PMapDBBased
-  (get-db [this])
-  (get-db-options [this])
-  (get-db-type [this])
-  (get-collection [this])
+(defprotocol PMapDBTransient
   (get-collection-name [this])
   (get-collection-type [this])
-  (get-collection-options [this])
-  (get-wrapper-serializers [this])
   (compact! [this] "Compacts the underlying storage to reclaim space and performance lost to fragmentattion.")
   (empty! [this] [this notify-listener?] "Empties the contents of the collection and signals listener or not."))
 
-(def ^:private mapdb-types {:file (fn [{:keys [file]}]
-                          (let [f (io/file file)]
-                            (io/make-parents f)
-                            (DBMaker/fileDB f)))
-                  :heap (fn [_] (DBMaker/heapDB))
-                  :memory (fn [_] (DBMaker/memoryDB))
-                  :direct-memory (fn [_] (DBMaker/memoryDirectDB))
-                  :temp-file (fn [_] (DBMaker/tempFileDB))})
+(defprotocol PMapDBPersistent
+  (get-db [this])
+  (get-db-type [this])
+  (get-db-options [this])
+  (get-collection [this])
+  (get-collection-options [this])
+  (get-wrapper-serializers [this]))
+
+(def ^:private mapdb-types
+  {:file (fn [{:keys [path]}]
+           (let [f (io/file path)]
+             (io/make-parents f)
+             (DBMaker/fileDB f)))
+   :heap (fn [_] (DBMaker/heapDB))
+   :memory (fn [_] (DBMaker/memoryDB))
+   :direct-memory (fn [_] (DBMaker/memoryDirectDB))
+   :temp-file (fn [_] (DBMaker/tempFileDB))})
 
 (def ^:private mapdb-options
   {:file-mmap-enable-if-supported? (boolean-setter fileMmapEnableIfSupported
@@ -89,7 +93,7 @@
 (s/def :mapdb/concurrency-scale int?)
 (s/def :mapdb/executor-enable? boolean?)
 (s/def :mapdb/transaction-enable? boolean?)
-(s/def :mapdb/file (s/or :path string?
+(s/def :mapdb/path (s/or :path string?
                          :file #(instance? java.io.File %)))
 (sdef-enum :mapdb/db-type (into #{} (map first mapdb-types)))
 
@@ -97,7 +101,7 @@
 
 (defmethod db-type :file [_]
   (s/keys :req-un [:mapdb/db-type
-                   :mapdb/file]
+                   :mapdb/path]
           :opt-un [:mapdb/file-mmap-enable-if-supported?
                    :mapdb/read-only?
                    :mapdb/checksum-header-bypass?
@@ -210,6 +214,9 @@
   {:edn {:raw-serializer :string
          :wrapper-serializer {:encoder (fn mapdb-edn-encoder [v] (pr-str v))
                               :decoder (fn mapdb-edn-decoder [v] (edn/read-string v))}}
+   :keyword {:raw-serializer :string
+             :wrapper-serializer {:encoder name
+                                  :decoder keyword}}
    :nippy {:raw-serializer :byte-array
            :wrapper-serializer {:encoder (conditional-body taoensso.nippy
                                                            (fn mapdb-nippy-encoder [v]
@@ -397,17 +404,12 @@
   (commit! [this] (.commit this))
   (rollback! [this] (.rollback this)))
 
-(extend-protocol PMapDBBased
-  DB
-  (get-db [this] this)
-  (compact! [this] (.. this getStore compact)))
-
 (s/fdef update!
-  :args (s/cat :map #(satisfies? PMapDBBased %)
+  :args (s/cat :map #(satisfies? PMapDBPersistent %)
                :key any?
                :fn fn?
                :optional-args (s/* any?))
-  :ret #(satisfies? PMapDBBased %))
+  :ret #(satisfies? PMapDBPersistent %))
 
 (defn update!
   "Updates atomically a value, where `k` is a
@@ -435,11 +437,11 @@
                       (get-collection-name m) (str k)))))))
 
 (s/fdef update-in!
-  :args (s/cat :map #(satisfies? PMapDBBased %)
+  :args (s/cat :map #(satisfies? PMapDBPersistent %)
                :keys (s/coll-of any?)
                :fn fn?
                :optional-args (s/* any?))
-  :ret #(satisfies? PMapDBBased %))
+  :ret #(satisfies? PMapDBPersistent %))
 
 (defn update-in!
   "Same as [[update!]] but with a path of keys."
@@ -567,18 +569,24 @@
   (rollback! [this] (.rollback db) this)
   java.io.Closeable
   (close [_] (.close db))
-  PMapDBBased
+  Iterable
+  (iterator [_] (let [trx (map (fn [^java.util.Map$Entry entry]
+                                 (clojure.lang.MapEntry. (key-decoder (.getKey entry))
+                                                         (value-decoder (.getValue entry)))))]
+                  (.iterator ^Iterable (eduction trx (iterator-seq (.. hm entrySet iterator))))))
+  PMapDBTransient
   (get-db ^DB [_] db)
   (get-db-options [_] db-opts)
   (get-db-type [_] (:db-type db-opts))
   (get-collection ^HTreeMap [_] hm)
-  (get-collection-name [_] hm-name)
-  (get-collection-type [_] :hash-map)
   (get-collection-options [_] hm-opts)
   (get-wrapper-serializers [_] {:key-encoder key-encoder
                                 :key-decoder key-decoder
                                 :value-encoder value-encoder
                                 :value-decoder value-decoder})
+  PMapDBPersistent
+  (get-collection-name [_] hm-name)
+  (get-collection-type [_] :hash-map)
   (compact! [this] (.. db getStore compact) this)
   (empty! [this] (empty! this false))
   (empty! [this notify-listener?]
@@ -618,6 +626,11 @@
                      (.iterator ^Iterable (eduction trx (iterator-seq (.descendingKeyIterator tm))))))
   (valIterator [_] (let [trx (map value-decoder)]
                      (.iterator ^Iterable (eduction trx (iterator-seq (.descendingValueIterator tm))))))
+  Iterable
+  (iterator [_] (let [trx (map (fn [^java.util.AbstractMap$SimpleImmutableEntry entry]
+                                 (clojure.lang.MapEntry. (key-decoder (.getKey entry))
+                                                         (value-decoder (.getValue entry)))))]
+                  (.iterator ^Iterable (eduction trx (iterator-seq (.entryIterator tm))))))
   clojure.lang.Seqable
   (seq [this] (when-not (.isEmpty tm)
                 (let [trx (map (fn [^java.util.Map$Entry kv]
@@ -673,21 +686,23 @@
   (rollback! [this] (.rollback db) this)
   java.io.Closeable
   (close [_] (.close db))
-  PMapDBBased
+  PMapDBTransient
   (get-db ^DB [_] db)
   (get-db-options [_] db-opts)
   (get-db-type [_] (:db-type db-opts))
-  (get-collection ^HTreeMap [_] tm)
-  (get-collection-name [_] tm-name)
-  (get-collection-type [_] :tree-map)
+  (get-collection ^BTreeMap [_] tm)
   (get-collection-options [_] tm-opts)
   (get-wrapper-serializers [_] {:key-encoder key-encoder
                                 :key-decoder key-decoder
                                 :value-encoder value-encoder
                                 :value-decoder value-decoder})
-  (compact! [this] (.. db getStore compact) this)
   (empty! [this] (.clear tm) this)
-  (empty! [this _] (.clear tm) this)
+  (empty! [this _]
+    (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  PMapDBPersistent
+  (get-collection-name [_] tm-name)
+  (get-collection-type [_] :tree-map)
+  (compact! [this] (.. db getStore compact) this)
   clojure.lang.IDeref
   (deref [_] (let [^java.util.Iterator iter (.. tm entryIterator)]
                (loop [ret (transient {})]
@@ -782,7 +797,7 @@
                                       :keyword-name keyword?)
                :options (s/? (s/or :mapdb.hashmap/options
                                    :mapdb.treemap/options)))
-  :ret #(satisfies? PMapDBBased %))
+  :ret #(satisfies? PMapDBTransient %))
 
 (defn open-collection!
   "Creates a datastructure backed by `db` with the given type, name and options.
@@ -808,7 +823,169 @@
                          (cond-> (:decoder value-serializer-wrapper) (assoc :value-decoder
                                                                             (:decoder value-serializer-wrapper))))]
      (wrapper-builder db db-or-spec (name collection-name) raw-hm
-                      (assoc merged :collection-type collection-type)
+                      (-> merged
+                          (assoc :collection-type collection-type)
+                          (dissoc :initial-content))
                       serializers (atom {::name (name collection-name)}))))
   ([db-or-spec collection-type collection-name] (open-collection! db-or-spec collection-type collection-name {:counter-enable? true}))
   ([collection-type collection-name] (open-collection! {:db-type :heap} collection-type collection-name {:counter-enable? true})))
+
+(deftype CljSortedTableMap [^Volume volume volume-opts
+                            ^SortedTableMap stm stm-opts
+                            key-encoder key-decoder
+                            value-encoder value-decoder
+                            metadata]
+  clojure.lang.IPersistentMap
+  (assoc [_ _ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (without [_ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (valAt [_ k] (value-decoder (.get stm (key-encoder k))))
+  (valAt [_ k default] (let [ke (key-encoder k)]
+                         (if (.containsKey stm ke)
+                           (value-decoder (.get stm ke))
+                           default)))
+  (conj [_ _] (throw (UnsupportedOperationException. "SortedTableMap is immutable.")))
+  (count [_] (.sizeLong stm))
+  clojure.lang.ITransientAssociative2
+  (containsKey [_ k] (.containsKey stm (key-encoder k)))
+  (entryAt [this k] (let [v (.valAt this k)]
+                      (clojure.lang.MapEntry. k v)))
+  clojure.lang.IMapIterable
+  (keyIterator [_] (let [trx (map key-decoder)]
+                     (.iterator ^Iterable (eduction trx (iterator-seq (.descendingKeyIterator stm))))))
+  (valIterator [_] (let [trx (map value-decoder)]
+                     (.iterator ^Iterable (eduction trx (iterator-seq (.descendingValueIterator stm))))))
+  Iterable
+  (iterator [_] (let [trx (map (fn [^java.util.AbstractMap$SimpleImmutableEntry entry]
+                                 (clojure.lang.MapEntry. (key-decoder (.getKey entry))
+                                                         (value-decoder (.getValue entry)))))]
+                  (.iterator ^Iterable (eduction trx (iterator-seq (.entryIterator stm))))))
+  clojure.lang.Seqable
+  (seq [this] (when-not (.isEmpty stm)
+                (let [trx (map (fn [^java.util.Map$Entry kv]
+                                 (clojure.lang.MapEntry. (key-decoder (.getKey kv))
+                                                         (value-decoder (.getValue kv)))))]
+                  (sequence trx (iterator-seq (.. stm descendingEntryIterator))))))
+  clojure.lang.IFn
+  (invoke [this k] (.valAt this k))
+  (invoke [this k default] (.valAt this k default))
+  clojure.lang.IMeta
+  (meta [_] @metadata)
+  clojure.lang.IReference
+  (alterMeta [_ f args] (reset! metadata (apply f @metadata args)))
+  (resetMeta [_ m] (reset! metadata m))
+  clojure.lang.IKVReduce
+  (kvreduce [_ f init]
+    (let [^java.util.Iterator iter (.. stm descendingEntryIterator)]
+      (loop [ret init]
+        (if (.hasNext iter)
+          (let [^java.util.Map$Entry kv (.next iter)
+                ret (f ret (key-decoder (.getKey kv)) (value-decoder (.getValue kv)))]
+            (if (reduced? ret)
+              @ret
+              (recur ret)))
+          ret))))
+  clojure.lang.IReduceInit
+  (reduce [_ f init]
+    (let [^java.util.Iterator iter (.. stm descendingEntryIterator)]
+      (loop [ret init]
+        (if (.hasNext iter)
+          (let [^java.util.Map$Entry kv (.next iter)
+                ret (f ret (clojure.lang.MapEntry. (key-decoder (.getKey kv))
+                                                   (value-decoder (.getValue kv))))]
+            (if (reduced? ret)
+              @ret
+              (recur ret)))
+          ret))))
+  clojure.lang.IReduce
+  (reduce [_ f]
+    (let [^java.util.Iterator iter (.. stm descendingEntryIterator)]
+      (loop [ret nil]
+        (if (.hasNext iter)
+          (let [^java.util.Map$Entry kv (.next iter)
+                ret (f ret (clojure.lang.MapEntry. (key-decoder (.getKey kv))
+                                                   (value-decoder (.getValue kv))))]
+            (if (reduced? ret)
+              @ret
+              (recur ret)))
+          ret))))
+  clojure.lang.MapEquivalence
+  java.io.Closeable
+  (close [_] (.close stm))
+  PMapDBPersistent
+  (get-db ^Volume [this] volume)
+  (get-db-options [this] volume-opts)
+  (get-collection ^SortedTableMap [this] stm)
+  (get-collection-options [this] stm-opts)
+  (get-wrapper-serializers [this] {:key-encoder key-encoder
+                                   :key-decoder key-decoder
+                                   :value-encoder value-encoder
+                                   :value-decoder value-decoder})
+  clojure.lang.IDeref
+  (deref [_] (let [^java.util.Iterator iter (.. stm entryIterator)]
+               (loop [ret (transient {})]
+                 (if (.hasNext iter)
+                   (let [^java.util.Map$Entry kv (.next iter)]
+                     (recur (assoc! ret (key-decoder (.getKey kv)) (value-decoder (.getValue kv)))))
+                   (persistent! ret))))))
+
+(def volume-types
+  {:file (fn [{:keys [path]}]
+           (-> (MappedFileVol/FACTORY) (.makeVolume path false)))
+   :read-only-file (fn [{:keys [path]}]
+                     (-> (MappedFileVol/FACTORY) (.makeVolume path true)))
+   :memory (fn [{:keys [_]}]
+             (-> (ByteArrayVol/FACTORY) (.makeVolume nil false)))
+   :direct-memory (fn [{:keys [_]}]
+                    (-> (ByteBufferMemoryVol/FACTORY) (.makeVolume nil false)))})
+
+(def ^:private sorted-table-map-options
+  {:page-size (fn [^org.mapdb.SortedTableMap$Companion$Maker stm size]
+                (.pageSize stm size))
+   :node-size (fn [^org.mapdb.SortedTableMap$Companion$Maker stm size]
+                (.nodeSize stm size))})
+
+(defn open-sorted-table-map!
+  [{:keys [volume-type] :as vol-opts}
+   {:keys [content] :as opts}]
+  (let [vol ((volume-types volume-type) vol-opts)
+        {:keys [key-serializer-wrapper value-serializer-wrapper
+                key-serializer value-serializer]} (merge-serializers opts)
+        {:keys [key-encoder value-encoder
+                key-decoder value-decoder]
+         :or {key-encoder identity value-encoder identity
+              key-decoder identity value-decoder identity}}
+        (-> {}
+            (cond-> (:encoder key-serializer-wrapper)
+              (assoc :key-encoder
+                     (:encoder key-serializer-wrapper)))
+            (cond-> (:decoder key-serializer-wrapper)
+              (assoc :key-decoder
+                     (:decoder key-serializer-wrapper)))
+            (cond-> (:encoder value-serializer-wrapper)
+              (assoc :value-encoder
+                     (:encoder value-serializer-wrapper)))
+            (cond-> (:decoder value-serializer-wrapper)
+              (assoc :value-decoder
+                     (:decoder value-serializer-wrapper))))]
+    (let [stm (if (not= volume-type :read-only-file)
+                (let [stm-build (SortedTableMap/create vol
+                                                       (if (instance? Serializer key-serializer)
+                                                         key-serializer
+                                                         (serializers key-serializer))
+                                                       (if (instance? Serializer value-serializer)
+                                                         value-serializer
+                                                         (serializers value-serializer)))]
+                  (configure-maker! sorted-table-map-options stm-build opts)
+                  (let [sink (.createFromSink stm-build)]
+                    (doseq [[k v] (sort-by first content)]
+                      (.put sink (key-encoder k) (value-encoder v)))
+                    (.create sink)))
+                (SortedTableMap/open vol
+                                     (if (instance? Serializer key-serializer)
+                                       key-serializer
+                                       (serializers key-serializer))
+                                     (if (instance? Serializer value-serializer)
+                                       value-serializer
+                                       (serializers value-serializer))))]
+      (->CljSortedTableMap vol vol-opts stm (dissoc opts :content) key-encoder key-decoder value-encoder
+                               value-decoder (atom {})))))
