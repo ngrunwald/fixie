@@ -374,7 +374,7 @@
    :expire-store-size (fn [^DB$HashMapMaker dbm v]
                       (.expireStoreSize dbm v))})
 
-(s/fdef open-raw-treemap!
+(s/fdef open-raw-hashmap!
   :args (s/cat :db #(instance? DB %)
                :hashmap-name (s/or :string-name string?
                                    :keyword-name keyword?)
