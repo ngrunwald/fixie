@@ -214,24 +214,28 @@
 (def ^:private composite-serializers
   {:edn {:raw-serializer :string
          :wrapper-serializer {:encoder (fn mapdb-edn-encoder [v] (pr-str v))
-                              :decoder (fn mapdb-edn-decoder [v] (edn/read-string v))}}
+                              :decoder (fn mapdb-edn-decoder [v] (if (nil? v) v (edn/read-string v)))}}
    :keyword {:raw-serializer :string
              :wrapper-serializer {:encoder name
-                                  :decoder keyword}}
+                                  :decoder (fn mapdb-keyword-encoder [v] (if (nil? v) v (keyword v)))}}
    :nippy {:raw-serializer :byte-array
            :wrapper-serializer {:encoder (conditional-body taoensso.nippy
                                                            (fn mapdb-nippy-encoder [v]
                                                              (taoensso.nippy/freeze v)))
                                 :decoder (conditional-body taoensso.nippy
                                                            (fn mapdb-nippy-decoder [v]
-                                                             (taoensso.nippy/thaw v)))}}
+                                                             (if (nil? v)
+                                                               v
+                                                               (taoensso.nippy/thaw v))))}}
    :json {:raw-serializer :string
           :wrapper-serializer {:encoder (conditional-body cheshire.core
                                                            (fn mapdb-json-encoder [v]
                                                              (cheshire.core/encode v)))
                                :decoder (conditional-body cheshire.core
                                                           (fn mapdb-json-decoder [v]
-                                                            (cheshire.core/decode v true)))}}})
+                                                            (if (nil? v)
+                                                              v
+                                                              (cheshire.core/decode v true))))}}})
 
 (def time-units
   {:ms TimeUnit/MILLISECONDS
