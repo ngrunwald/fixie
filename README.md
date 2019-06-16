@@ -24,14 +24,15 @@ For more details about the different options, have a look at [MapDB Docs](https:
 	@hm ;; {:foo 42 :bar 54} => deref returns a PersistentMap
 	(hm :foo) ;; 42
 	(dissoc! hm :bar) ;; {:foo 42}
-	(f/update! hm :foo inc) ;; {:foo 43}
+    (f/update! hm :foo inc) ;; {:foo 43} => atomic update with fixie.core/update
+                            ;; and fixie.core/update-in
 	(rollback! hm) ;; {} everything rolledback
 	(assoc! hm [:composite :key] 56) ;; {[:composite :key] 56}
-	(commit! hm) ;; changes are persisted to disk/memory
+	(commit! hm) ;; => changes are persisted to disk/memory
 	)
 ```
 
-Fixie's heart is the `open-collection` fn which creates instances of the different data structures. First argument is either a `DB` object (created with `open-database!` for example) or a specification for DB with the same form. Mostly you should set `:db-type` and the path under `:file` if you chose `file` for `:db-type` (if you xant persistence).
+Fixie's heart is the `open-collection` fn which creates instances of the different data structures. First argument is either a `DB` object (created with `open-database!` for example) or a specification for DB with the same form. Mostly you should set `:db-type` and the path under `:file` if you chose `file` for `:db-type` (if you want persistence on disk).
 
 
 

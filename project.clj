@@ -13,9 +13,9 @@
 
                  ;; use static versions to override mapdb ranges
                  [org.jetbrains.kotlin/kotlin-stdlib "1.3.31"]
-                 [org.eclipse.collections/eclipse-collections-api "9.2.0"]
-                 [org.eclipse.collections/eclipse-collections "9.2.0"]
-                 [org.eclipse.collections/eclipse-collections-forkjoin "9.2.0"]
+                 [org.eclipse.collections/eclipse-collections-api "10.0.0.M3"]
+                 [org.eclipse.collections/eclipse-collections "10.0.0.M3"]
+                 [org.eclipse.collections/eclipse-collections-forkjoin "10.0.0.M3"]
                  [com.google.guava/guava "23.0"]]
   :profiles {:dev {:dependencies [[metosin/testit "0.4.0"]
                                   [orchestra "2019.02.06-1"]

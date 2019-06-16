@@ -806,6 +806,9 @@
 
 (defn open-collection!
   "Creates a datastructure backed by `db` with the given type, name and options.
+  The specs contain all possible options, and most of them correspond directly
+  to an equivalent method in the MapDB builder. You should call `fixie.core/close!`
+  after use to guarantee the safety of writes and avoid leakage.  
   Ex: `(open-collections! {:db-type :file
                            :file   \"mydbfile\"
                            :transaction-enable? true
